@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spesenabrechnung-srg-msp-v63';
+const CACHE_NAME = 'spesenabrechnung-srg-msp-v64';
 const APP_SHELL = ['./','./index.html','./manifest.webmanifest','./icon.svg'];
 
 self.addEventListener('install', event => {
