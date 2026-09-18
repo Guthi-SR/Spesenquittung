@@ -1,5 +1,10 @@
-const CACHE_NAME = 'spesenabrechnung-srg-msp-v64';
-const APP_SHELL = ['./','./index.html','./manifest.webmanifest','./icon.svg'];
+const CACHE_NAME = 'spesenabrechnung-srg-msp-v66';
+const APP_SHELL = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './logo-spesen.png'
+];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -20,6 +25,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const req = event.request;
   const url = new URL(req.url);
+
   if (url.origin !== self.location.origin) return;
 
   if (req.mode === 'navigate') {
@@ -35,5 +41,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  event.respondWith(caches.match(req).then(cached => cached || fetch(req)));
+  event.respondWith(
+    caches.match(req).then(cached => cached || fetch(req))
+  );
 });
