@@ -2,8 +2,15 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Spesenquittung Schiedsrichter – A5 quer</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f4e79">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
   *{box-sizing:border-box}
@@ -2549,7 +2556,7 @@
     const pasteBtn=$('pasteMailBtn');
     let lastPasteAttempt=0;
 
-    const pasteFromClipboard=async ()=>{
+    const pasteFromClipboard=async (ev)=>{
       const now=Date.now();
       if(now-lastPasteAttempt<700) return;
       lastPasteAttempt=now;
@@ -2558,8 +2565,12 @@
       field.focus();
 
       try{
-        if(!window.isSecureContext) throw new Error('not-secure');
-        if(!navigator.clipboard || typeof navigator.clipboard.readText!=='function') throw new Error('clipboard-api-unavailable');
+        if(!window.isSecureContext){
+          throw new Error('not-secure');
+        }
+        if(!navigator.clipboard || typeof navigator.clipboard.readText!=='function'){
+          throw new Error('clipboard-api-unavailable');
+        }
 
         const text=await navigator.clipboard.readText();
 
@@ -2579,6 +2590,7 @@
       }
     };
 
+    // Safari/WebKit verlangt den Clipboard-Zugriff direkt aus einer Benutzer-Geste.
     if(window.PointerEvent){
       pasteBtn.addEventListener('pointerup',pasteFromClipboard);
     }else{
@@ -2761,5 +2773,14 @@
   window.addEventListener('orientationchange',()=>setTimeout(fitReceiptPreview,100));
 })();
 </script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js', {scope:'./'}).catch(() => {});
+    });
+  }
+</script>
+
 </body>
 </html>
