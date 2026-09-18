@@ -1,6 +1,6 @@
 {
   "name": "Spesenabrechnung SRG MSP",
-  "short_name": "Spesen SRG MSP",
+  "short_name": "Spesenabrechnung SRG MSP",
   "description": "Spesenabrechnung für Schiedsrichter der SRG Main-Spessart",
   "lang": "de-DE",
   "start_url": "./",
