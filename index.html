@@ -8,8 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
-<link rel="manifest" href="./manifest.webmanifest">
-<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="manifest" href="./manifest.webmanifest?v=66">
+<link rel="icon" href="./logo-spesen.png?v=66" type="image/png">
+<link rel="apple-touch-icon" href="./logo-spesen.png?v=66">
 <title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
@@ -2775,9 +2776,10 @@
 </script>
 
 <script>
+  // Web-App-Unterstützung (GitHub Pages / PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js', {scope:'./'}).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=66', {scope:'./'}).catch(() => {});
     });
   }
 </script>
