@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spesenabrechnung-srg-msp-v66';
+const CACHE_NAME = 'spesenabrechnung-srg-msp-v67';
 const APP_SHELL = [
   './',
   './index.html',
