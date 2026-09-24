@@ -8,9 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
-<link rel="manifest" href="./manifest.webmanifest?v=67">
-<link rel="icon" href="./logo-spesen.png?v=67" type="image/png">
-<link rel="apple-touch-icon" href="./logo-spesen.png?v=67">
+<link rel="manifest" href="./manifest.webmanifest?v=68">
+<link rel="icon" href="./logo-spesen.png?v=68" type="image/png">
+<link rel="apple-touch-icon" href="./logo-spesen.png?v=68">
 <title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
@@ -329,6 +329,39 @@
     }
     body.print-a4 #a4PrintContainer .sheet:first-child{margin-bottom:1mm!important}
   }
+
+  /* v68: Lokales Spesenquittungs-Archiv */
+  .archive-panel .archive-actions{
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px
+  }
+  .archive-panel .archive-actions button{flex:0 1 auto}
+  .archive-panel .archive-note{margin-top:8px}
+  .receipt-archive{display:grid;gap:10px;margin-top:12px}
+  .archive-month{
+    border:1px solid #d7dde3;border-radius:10px;background:#f8fafb;overflow:hidden
+  }
+  .archive-month>summary{
+    cursor:pointer;padding:10px 12px;font-weight:800;background:#eef2f5;
+    display:flex;justify-content:space-between;gap:12px;align-items:center
+  }
+  .archive-month-list{display:grid;gap:8px;padding:9px}
+  .archive-card{
+    background:#fff;border:1px solid #d9dee3;border-radius:9px;padding:9px 10px;
+    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center
+  }
+  .archive-card-title{font-weight:800;font-size:13px;overflow-wrap:anywhere}
+  .archive-card-meta{font-size:11px;color:#5f6872;margin-top:3px;line-height:1.35}
+  .archive-card-total{font-weight:800;white-space:nowrap}
+  .archive-card-actions{
+    grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px
+  }
+  .archive-card-actions button{padding:7px 9px;font-size:11px}
+  .archive-empty{
+    padding:12px;border:1px dashed #c8cfd6;border-radius:9px;color:#68727c;background:#fafbfc
+  }
+  .archive-active{border-color:#17803d;box-shadow:0 0 0 2px #17803d20}
+  .archive-file-input{display:none!important}
+
   @media(max-width:800px){
     body{overflow-x:hidden}
     .toolbar{margin:6px;padding:9px;border-radius:9px}
@@ -367,6 +400,12 @@
     .sra-dir-toolbar label{min-width:0}
     .sra-dir-actions{margin-top:7px}
     .guide-step{padding:5px 7px;font-size:12px}
+    .archive-panel .archive-actions{display:grid;grid-template-columns:1fr}
+    .archive-panel .archive-actions button{width:100%}
+    .archive-card{grid-template-columns:1fr}
+    .archive-card-total{grid-column:1}
+    .archive-card-actions{display:grid;grid-template-columns:1fr}
+    .archive-card-actions button{width:100%}
     .sheet-wrap{
       width:100%;
       overflow:hidden;
@@ -624,6 +663,23 @@
         <span id="feeStatus" class="status">Die Spesen werden beim Einlesen einer Einteilung automatisch geprüft.</span>
       </div>
       <div class="privacy-note">Grundlage: Spesenordnungen 2026/27 von HFV und BFV. Sonderfälle wie Turniere, Pokal- oder Relegationsspiele werden nur automatisch gesetzt, wenn die dafür nötigen Angaben eindeutig aus der Einteilung hervorgehen.</div>
+    </div>
+
+    <div class="panel archive-panel" id="archivePanel">
+      <h2>5. Spesenquittungen speichern &amp; laden</h2>
+      <div class="hint archive-note">
+        Die Quittungen werden <strong>nur lokal in diesem Browser</strong> gespeichert.
+        Zusätzlich kannst du jede Quittung als JSON-Datei sichern und später wieder laden und bearbeiten.
+      </div>
+      <div class="archive-actions">
+        <button id="saveReceiptBrowserBtn" type="button">Im Browser speichern</button>
+        <button id="saveReceiptFileBtn" type="button" class="secondary">Als Datei speichern</button>
+        <button id="loadReceiptFileBtn" type="button" class="light">Datei laden</button>
+        <button id="exportReceiptArchiveBtn" type="button" class="light">Gesamtes Archiv sichern</button>
+        <input id="receiptFileInput" class="archive-file-input" type="file" accept=".json,application/json">
+      </div>
+      <div id="receiptArchiveStatus" class="status">Noch keine Spesenquittung gespeichert.</div>
+      <div id="receiptArchive" class="receipt-archive"></div>
     </div>
 
   </div>
@@ -2201,6 +2257,7 @@
       origin=norm(r.srStart);
       destination=norm(r.dest);
 
+      // Abholpunkte genau in der berechneten Reihenfolge als Google-Maps-Zwischenstopps.
       const order=Array.isArray(teamRouteState.order)?teamRouteState.order:[];
       for(const id of order){
         const wp=id==='sra1'?norm(r.a1Meet):id==='sra2'?norm(r.a2Meet):'';
@@ -2565,7 +2622,7 @@
   }
   function applyParsed(){
     const text=$('mailText').value; if(!norm(text)){ $('status').textContent='Bitte zuerst eine Einteilungsmail laden oder Text einfügen.'; $('status').className='status warn'; return }
-    const p=parseAssignment(text); lastParsedAssignment=p; clearMileageActualState(); let count=0;
+    const p=parseAssignment(text); lastParsedAssignment=p; activeReceiptId=null; clearMileageActualState(); let count=0;
     guideState.parsed=true;
     guideState.addressesChecked=false;
     guideState.routeRequested=false;
@@ -2605,6 +2662,492 @@
     // Falls Liga/Spielklasse allein nicht reichen, wird ausschließlich der aus
     // der Mail stammende Spielort zur geographischen Zuordnung herangezogen.
     resolveAssociationByDestination(p);
+  }
+
+
+  // ---------- Spesenquittungen speichern / laden ----------
+  const RECEIPT_ARCHIVE_KEY='srgMspSpesenReceiptArchiveV1';
+  const RECEIPT_FILE_FORMAT='srg-msp-spesenquittung';
+  const RECEIPT_FILE_VERSION=1;
+  let activeReceiptId=null;
+
+  const RECEIPT_EXCLUDE_IDS=new Set([
+    'defName','defGroup','defStreet','defTown',
+    'sraDirectorySearch','sraAddName','sraAddAddress','sraAddPhone','sraAddEmail',
+    'receiptFileInput'
+  ]);
+
+  function loadReceiptArchive(){
+    try{
+      const raw=localStorage.getItem(RECEIPT_ARCHIVE_KEY);
+      const arr=raw?JSON.parse(raw):[];
+      return Array.isArray(arr)?arr:[];
+    }catch(e){ return []; }
+  }
+
+  function storeReceiptArchive(records){
+    try{
+      localStorage.setItem(RECEIPT_ARCHIVE_KEY,JSON.stringify(records||[]));
+      return true;
+    }catch(e){
+      $('receiptArchiveStatus').textContent='Speichern im Browser nicht möglich. Der lokale Speicher ist möglicherweise voll.';
+      $('receiptArchiveStatus').className='status warn';
+      return false;
+    }
+  }
+
+  function archiveText(v){ return String(v==null?'':v).trim(); }
+
+  function makeReceiptId(date,home,away,name){
+    const base=[date,home,away,name].map(archiveText).join('|').toLowerCase();
+    let h=2166136261;
+    for(let i=0;i<base.length;i++){
+      h^=base.charCodeAt(i);
+      h=Math.imul(h,16777619);
+    }
+    return 'receipt-'+(h>>>0).toString(16);
+  }
+
+  function snapshotReceiptControls(){
+    const out={};
+    document.querySelectorAll('input[id],textarea[id],select[id]').forEach(el=>{
+      if(RECEIPT_EXCLUDE_IDS.has(el.id)) return;
+      if(el.type==='file') return;
+      if(el.type==='checkbox'||el.type==='radio'){
+        out[el.id]={kind:'checked',value:!!el.checked};
+      }else{
+        out[el.id]={kind:'value',value:el.value};
+      }
+    });
+    return out;
+  }
+
+  function restoreReceiptControls(values){
+    if(!values||typeof values!=='object') return;
+    Object.entries(values).forEach(([id,data])=>{
+      const el=$(id);
+      if(!el||!data) return;
+      if(data.kind==='checked') el.checked=!!data.value;
+      else el.value=data.value==null?'':String(data.value);
+    });
+  }
+
+  function currentReceiptRecord(){
+    const date=archiveText($('date').value);
+    const home=archiveText($('home').value);
+    const away=archiveText($('away').value);
+    const refName=archiveText($('name').value);
+    const id=activeReceiptId||makeReceiptId(date,home,away,refName);
+    const existing=loadReceiptArchive().find(r=>r&&r.id===id);
+
+    return {
+      format:RECEIPT_FILE_FORMAT,
+      version:RECEIPT_FILE_VERSION,
+      id,
+      createdAt:(existing&&existing.createdAt)||new Date().toISOString(),
+      updatedAt:new Date().toISOString(),
+      summary:{
+        date,
+        home,
+        away,
+        place:archiveText($('place').value),
+        league:archiveText(lastParsedAssignment&&lastParsedAssignment.league),
+        competition:archiveText(lastParsedAssignment&&lastParsedAssignment.competition),
+        total:archiveText($('total').value),
+        referee:refName
+      },
+      controls:snapshotReceiptControls(),
+      state:{
+        lastParsedAssignment:lastParsedAssignment||null,
+        mileageActualState:mileageActualState||null,
+        mileageCapNotices:Array.isArray(mileageCapNotices)?mileageCapNotices:[],
+        currentRoutes:Array.isArray(currentRoutes)?currentRoutes:[],
+        selectedRouteIndex:Number.isFinite(selectedRouteIndex)?selectedRouteIndex:-1,
+        teamRouteState:teamRouteState||null,
+        guideState:Object.assign({},guideState)
+      },
+      ui:{
+        mailMeta:$('mailMeta')?$('mailMeta').textContent:'',
+        sra1Name:$('teamSra1Name')?$('teamSra1Name').textContent:'',
+        sra2Name:$('teamSra2Name')?$('teamSra2Name').textContent:''
+      }
+    };
+  }
+
+  function saveCurrentReceiptToBrowser(showMessage=true){
+    const record=currentReceiptRecord();
+    if(!record.summary.date){
+      $('receiptArchiveStatus').textContent='Bitte zuerst ein Spieldatum eintragen.';
+      $('receiptArchiveStatus').className='status warn';
+      return null;
+    }
+
+    const records=loadReceiptArchive();
+    const idx=records.findIndex(r=>r&&r.id===record.id);
+    if(idx>=0){
+      record.createdAt=records[idx].createdAt||record.createdAt;
+      records[idx]=record;
+    }else{
+      // Gleiche Partie auch dann aktualisieren, wenn sie zuvor über eine Datei geladen wurde.
+      const same=records.findIndex(r=>r&&r.summary &&
+        archiveText(r.summary.date)===record.summary.date &&
+        archiveText(r.summary.home)===record.summary.home &&
+        archiveText(r.summary.away)===record.summary.away);
+      if(same>=0){
+        record.id=records[same].id;
+        record.createdAt=records[same].createdAt||record.createdAt;
+        records[same]=record;
+      }else records.push(record);
+    }
+
+    if(!storeReceiptArchive(records)) return null;
+    activeReceiptId=record.id;
+    renderReceiptArchive();
+    if(showMessage){
+      $('receiptArchiveStatus').textContent='Spesenquittung wurde im Browser gespeichert. Weitere Änderungen können mit demselben Button aktualisiert werden.';
+      $('receiptArchiveStatus').className='status ok';
+    }
+    return record;
+  }
+
+  function safeFilePart(v,max=42){
+    return archiveText(v)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/ß/g,'ss')
+      .replace(/[^a-zA-Z0-9_-]+/g,'-')
+      .replace(/^-+|-+$/g,'')
+      .slice(0,max)||'Spesenquittung';
+  }
+
+  function receiptFilename(record){
+    const s=record.summary||{};
+    return [
+      'Spesen',
+      safeFilePart(s.date||'ohne-Datum'),
+      safeFilePart(s.home||'Heim'),
+      safeFilePart(s.away||'Gast')
+    ].join('_')+'.json';
+  }
+
+  async function saveJsonFile(payload,filename){
+    const text=JSON.stringify(payload,null,2);
+    const blob=new Blob([text],{type:'application/json;charset=utf-8'});
+
+    // Auf Chromium/Android/Desktop: echter "Speichern unter"-Dialog, wenn verfügbar.
+    if(typeof window.showSaveFilePicker==='function'){
+      try{
+        const handle=await window.showSaveFilePicker({
+          suggestedName:filename,
+          types:[{description:'Spesenquittung JSON',accept:{'application/json':['.json']}}]
+        });
+        const writable=await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return true;
+      }catch(err){
+        if(err&&err.name==='AbortError') return false;
+      }
+    }
+
+    // Safari/iPhone und Browser ohne File-System-API: normaler Download.
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=filename;
+    a.rel='noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    return true;
+  }
+
+  async function saveCurrentReceiptAsFile(){
+    const record=currentReceiptRecord();
+    if(!record.summary.date){
+      $('receiptArchiveStatus').textContent='Bitte zuerst ein Spieldatum eintragen.';
+      $('receiptArchiveStatus').className='status warn';
+      return;
+    }
+    await saveJsonFile(record,receiptFilename(record));
+    $('receiptArchiveStatus').textContent='Spesenquittung wurde als Datei vorbereitet/gespeichert.';
+    $('receiptArchiveStatus').className='status ok';
+  }
+
+  function monthKeyForRecord(r){
+    const d=archiveText(r&&r.summary&&r.summary.date);
+    return /^\d{4}-\d{2}-\d{2}$/.test(d)?d.slice(0,7):'0000-00';
+  }
+
+  function formatArchiveMonth(key){
+    if(key==='0000-00') return 'Ohne Datum';
+    const [y,m]=key.split('-').map(Number);
+    try{
+      return new Intl.DateTimeFormat('de-DE',{month:'long',year:'numeric'}).format(new Date(y,m-1,1));
+    }catch(e){ return key; }
+  }
+
+  function formatArchiveDate(v){
+    const s=archiveText(v);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(s)) return s||'ohne Datum';
+    const [y,m,d]=s.split('-').map(Number);
+    return new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(y,m-1,d));
+  }
+
+  function parseMoneyValue(v){
+    const n=parseFloat(String(v||'').replace(/\./g,'').replace(',','.').replace(/[^\d.-]/g,''));
+    return Number.isFinite(n)?n:0;
+  }
+
+  function renderReceiptArchive(){
+    const box=$('receiptArchive');
+    if(!box) return;
+    box.innerHTML='';
+    const records=loadReceiptArchive()
+      .filter(Boolean)
+      .sort((a,b)=>{
+        const da=archiveText(a.summary&&a.summary.date);
+        const db=archiveText(b.summary&&b.summary.date);
+        if(da!==db) return db.localeCompare(da);
+        return archiveText(b.updatedAt).localeCompare(archiveText(a.updatedAt));
+      });
+
+    if(!records.length){
+      const empty=document.createElement('div');
+      empty.className='archive-empty';
+      empty.textContent='Noch keine gespeicherten Spesenquittungen. Nach dem Speichern werden sie hier automatisch nach Monat und Datum sortiert.';
+      box.appendChild(empty);
+      return;
+    }
+
+    const groups=new Map();
+    records.forEach(r=>{
+      const key=monthKeyForRecord(r);
+      if(!groups.has(key)) groups.set(key,[]);
+      groups.get(key).push(r);
+    });
+
+    [...groups.entries()].sort((a,b)=>b[0].localeCompare(a[0])).forEach(([month,items])=>{
+      const details=document.createElement('details');
+      details.className='archive-month';
+      details.open=true;
+
+      const summary=document.createElement('summary');
+      const title=document.createElement('span');
+      title.textContent=formatArchiveMonth(month);
+      const stats=document.createElement('span');
+      const monthTotal=items.reduce((sum,r)=>sum+parseMoneyValue(r.summary&&r.summary.total),0);
+      stats.textContent=items.length+' Quittung'+(items.length===1?'':'en')+(monthTotal?' · '+monthTotal.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €':'');
+      summary.append(title,stats);
+      details.appendChild(summary);
+
+      const list=document.createElement('div');
+      list.className='archive-month-list';
+
+      items.forEach(r=>{
+        const s=r.summary||{};
+        const card=document.createElement('div');
+        card.className='archive-card'+(r.id===activeReceiptId?' archive-active':'');
+
+        const info=document.createElement('div');
+        const t=document.createElement('div');
+        t.className='archive-card-title';
+        t.textContent=formatArchiveDate(s.date)+' · '+(archiveText(s.home)||'Heim')+' – '+(archiveText(s.away)||'Gast');
+        const meta=document.createElement('div');
+        meta.className='archive-card-meta';
+        meta.textContent=[s.competition||s.league,s.place,s.referee].filter(Boolean).join(' · ') || 'Keine weiteren Angaben';
+        info.append(t,meta);
+
+        const total=document.createElement('div');
+        total.className='archive-card-total';
+        total.textContent=archiveText(s.total)?archiveText(s.total)+' €':'';
+
+        const actions=document.createElement('div');
+        actions.className='archive-card-actions';
+
+        const openBtn=document.createElement('button');
+        openBtn.type='button';
+        openBtn.textContent='Öffnen / bearbeiten';
+        openBtn.dataset.archiveOpen=r.id;
+
+        const fileBtn=document.createElement('button');
+        fileBtn.type='button';
+        fileBtn.className='secondary';
+        fileBtn.textContent='Datei speichern';
+        fileBtn.dataset.archiveFile=r.id;
+
+        const delBtn=document.createElement('button');
+        delBtn.type='button';
+        delBtn.className='light';
+        delBtn.textContent='Löschen';
+        delBtn.dataset.archiveDelete=r.id;
+
+        actions.append(openBtn,fileBtn,delBtn);
+        card.append(info,total,actions);
+        list.appendChild(card);
+      });
+
+      details.appendChild(list);
+      box.appendChild(details);
+    });
+
+    box.querySelectorAll('[data-archive-open]').forEach(btn=>btn.addEventListener('click',()=>openArchivedReceipt(btn.dataset.archiveOpen)));
+    box.querySelectorAll('[data-archive-file]').forEach(btn=>btn.addEventListener('click',async()=>{
+      const r=loadReceiptArchive().find(x=>x&&x.id===btn.dataset.archiveFile);
+      if(r) await saveJsonFile(r,receiptFilename(r));
+    }));
+    box.querySelectorAll('[data-archive-delete]').forEach(btn=>btn.addEventListener('click',()=>{
+      const records=loadReceiptArchive();
+      const r=records.find(x=>x&&x.id===btn.dataset.archiveDelete);
+      if(!r) return;
+      const s=r.summary||{};
+      if(!confirm('Spesenquittung vom '+formatArchiveDate(s.date)+' ('+(s.home||'Heim')+' – '+(s.away||'Gast')+') wirklich aus dem Browser löschen?')) return;
+      const next=records.filter(x=>x&&x.id!==r.id);
+      storeReceiptArchive(next);
+      if(activeReceiptId===r.id) activeReceiptId=null;
+      renderReceiptArchive();
+      $('receiptArchiveStatus').textContent='Spesenquittung wurde aus dem Browser-Archiv gelöscht.';
+      $('receiptArchiveStatus').className='status';
+    }));
+  }
+
+  function openArchivedReceipt(id){
+    const record=loadReceiptArchive().find(r=>r&&r.id===id);
+    if(!record) return false;
+    return restoreReceiptRecord(record);
+  }
+
+  function restoreReceiptRecord(record){
+    if(!record||record.format!==RECEIPT_FILE_FORMAT){
+      $('receiptArchiveStatus').textContent='Diese Datei ist keine gültige SRG-MSP-Spesenquittung.';
+      $('receiptArchiveStatus').className='status warn';
+      return false;
+    }
+
+    activeReceiptId=record.id||null;
+
+    // Zuerst Fahrtart setzen, damit die richtige Oberfläche sichtbar wird.
+    restoreReceiptControls(record.controls||{});
+    setTravelMode();
+    // setTravelMode kann einzelne Felder zurücksetzen, deshalb danach exakt erneut herstellen.
+    restoreReceiptControls(record.controls||{});
+
+    const st=record.state||{};
+    lastParsedAssignment=st.lastParsedAssignment||null;
+    mileageActualState=Object.assign({srKm:null,teamKm:null,team1Km:null,team2Km:null,sra1Km:null,sra2Km:null,source:''},st.mileageActualState||{});
+    mileageCapNotices=Array.isArray(st.mileageCapNotices)?st.mileageCapNotices:[];
+    currentRoutes=Array.isArray(st.currentRoutes)?st.currentRoutes:[];
+    selectedRouteIndex=Number.isFinite(st.selectedRouteIndex)?st.selectedRouteIndex:-1;
+    if(st.teamRouteState&&typeof st.teamRouteState==='object'){
+      teamRouteState=Object.assign(
+        {srRoutes:[],sra1Routes:[],sra2Routes:[],selectedSr:-1,selectedSra1:-1,selectedSra2:-1,order:[],orderLabel:'',legPassengers:[],resolved:null,sra1Direct:false,sra2Direct:false,sra1Label:'Zuhause ↔ Treffpunkt',sra2Label:'Zuhause ↔ Treffpunkt'},
+        st.teamRouteState
+      );
+    }
+    Object.keys(guideState).forEach(k=>guideState[k]=!!(st.guideState&&st.guideState[k]));
+
+    if(record.ui){
+      if($('mailMeta')) $('mailMeta').textContent=record.ui.mailMeta||'';
+      if($('teamSra1Name')) $('teamSra1Name').textContent=record.ui.sra1Name||'';
+      if($('teamSra2Name')) $('teamSra2Name').textContent=record.ui.sra2Name||'';
+    }
+
+    syncMeetingPoint();
+    updateMeetingShortcutState(1);
+    updateMeetingShortcutState(2);
+    updateTeamMileageRuleUI();
+
+    if(lastParsedAssignment){
+      updateAssociationAutoInfo(lastParsedAssignment);
+      updateSpecialFeeQuestion(lastParsedAssignment,false);
+      updateKmLimitHint(lastParsedAssignment);
+    }
+
+    calc();
+    updateReceiptVisibility();
+
+    if($('travelMode').value==='team'){
+      if(teamRouteState.srRoutes&&teamRouteState.srRoutes.length) renderTeamRoutes();
+      $('teamTravelSummary').hidden=!guideState.routeChosen;
+    }else{
+      if(currentRoutes.length) renderRoutes(currentRoutes);
+    }
+
+    $('googleMapsBtn').disabled=!guideState.routeChosen;
+    $('googleMapsSra1Btn').disabled=!guideState.routeChosen;
+    $('googleMapsSra2Btn').disabled=!guideState.routeChosen;
+
+    guideState.parsed=!!(lastParsedAssignment||guideState.parsed);
+    updateGuide();
+    renderReceiptArchive();
+
+    $('receiptArchiveStatus').textContent='Gespeicherte Spesenquittung geladen. Du kannst jetzt Änderungen vornehmen und anschließend erneut speichern.';
+    $('receiptArchiveStatus').className='status ok';
+
+    const toolbar=document.querySelector('.toolbar');
+    if(toolbar) toolbar.scrollIntoView({behavior:'smooth',block:'start'});
+    return true;
+  }
+
+  async function exportReceiptArchive(){
+    const records=loadReceiptArchive();
+    if(!records.length){
+      $('receiptArchiveStatus').textContent='Im Browser sind noch keine Spesenquittungen gespeichert.';
+      $('receiptArchiveStatus').className='status warn';
+      return;
+    }
+    const payload={
+      format:'srg-msp-spesenarchiv',
+      version:1,
+      exportedAt:new Date().toISOString(),
+      receipts:records
+    };
+    await saveJsonFile(payload,'Spesenarchiv_SRG_MSP_'+new Date().toISOString().slice(0,10)+'.json');
+    $('receiptArchiveStatus').textContent='Das komplette Browser-Archiv wurde als Datei gesichert.';
+    $('receiptArchiveStatus').className='status ok';
+  }
+
+  async function importReceiptFile(file){
+    if(!file) return;
+    try{
+      const text=await file.text();
+      const data=JSON.parse(text);
+
+      if(data&&data.format==='srg-msp-spesenarchiv'&&Array.isArray(data.receipts)){
+        const current=loadReceiptArchive();
+        const map=new Map(current.filter(Boolean).map(r=>[r.id,r]));
+        data.receipts.filter(Boolean).forEach(r=>{
+          if(r.format===RECEIPT_FILE_FORMAT && r.id) map.set(r.id,r);
+        });
+        const merged=[...map.values()];
+        if(!storeReceiptArchive(merged)) return;
+        renderReceiptArchive();
+        $('receiptArchiveStatus').textContent=data.receipts.length+' Quittung'+(data.receipts.length===1?'':'en')+' aus dem Archiv importiert.';
+        $('receiptArchiveStatus').className='status ok';
+        return;
+      }
+
+      if(data&&data.format===RECEIPT_FILE_FORMAT){
+        if(!data.id){
+          const s=data.summary||{};
+          data.id=makeReceiptId(s.date,s.home,s.away,s.referee);
+        }
+        const records=loadReceiptArchive();
+        const idx=records.findIndex(r=>r&&r.id===data.id);
+        if(idx>=0) records[idx]=data; else records.push(data);
+        storeReceiptArchive(records);
+        renderReceiptArchive();
+        restoreReceiptRecord(data);
+        return;
+      }
+
+      throw new Error('Unbekanntes Dateiformat');
+    }catch(err){
+      $('receiptArchiveStatus').textContent='Datei konnte nicht geladen werden. Bitte eine zuvor gespeicherte Spesenquittungs- oder Archivdatei auswählen.';
+      $('receiptArchiveStatus').className='status warn';
+    }finally{
+      if($('receiptFileInput')) $('receiptFileInput').value='';
+    }
   }
 
   if($('pasteMailBtn')){
@@ -2813,6 +3356,13 @@
     $('printFormat').addEventListener('click',markPrintFormat);
   }
 
+
+  if($('saveReceiptBrowserBtn')) $('saveReceiptBrowserBtn').addEventListener('click',()=>saveCurrentReceiptToBrowser(true));
+  if($('saveReceiptFileBtn')) $('saveReceiptFileBtn').addEventListener('click',saveCurrentReceiptAsFile);
+  if($('loadReceiptFileBtn')) $('loadReceiptFileBtn').addEventListener('click',()=>$('receiptFileInput').click());
+  if($('receiptFileInput')) $('receiptFileInput').addEventListener('change',()=>importReceiptFile($('receiptFileInput').files&&$('receiptFileInput').files[0]));
+  if($('exportReceiptArchiveBtn')) $('exportReceiptArchiveBtn').addEventListener('click',exportReceiptArchive);
+
   document.querySelectorAll('.calc,.travel').forEach(el=>el.addEventListener('input',calc));
   ['srRate','teamRate','team2Rate','sra1Rate','sra2Rate'].forEach(id=>$(id).addEventListener('change',()=>{if(mileageStateHasValues())applyMileageCaps();else calc()}));
   ['srKm','teamKm','team2Km','sra1Km','sra2Km'].forEach(id=>{
@@ -2821,7 +3371,7 @@
   });
   updateTravelRateVisibility();
   ids.forEach(id=>{const el=$(id); if(el && !el.readOnly)el.addEventListener('change',()=>{if(id!=='total')calc()})});
-  loadDefaults();syncMeetingPoint();setTravelMode();updateTeamMileageRuleUI();renderSraDirectory();updateMeetingShortcutState(1);updateMeetingShortcutState(2);calc();
+  loadDefaults();syncMeetingPoint();setTravelMode();updateTeamMileageRuleUI();renderSraDirectory();updateMeetingShortcutState(1);updateMeetingShortcutState(2);calc();renderReceiptArchive();
   updateGuide();
   fitReceiptPreview();
   window.addEventListener('resize',fitReceiptPreview);
@@ -2833,7 +3383,7 @@
   // Web-App-Unterstützung (GitHub Pages / PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=67', {scope:'./'}).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=68', {scope:'./'}).catch(() => {});
     });
   }
 </script>
