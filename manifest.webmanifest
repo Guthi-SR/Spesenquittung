@@ -11,8 +11,8 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "./logo-spesen.png?v=67",
-      "sizes": "192x192",
+      "src": "./logo-spesen.png?v=68",
+      "sizes": "1254x1254",
       "type": "image/png",
       "purpose": "any maskable"
     }
