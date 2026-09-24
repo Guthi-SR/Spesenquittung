@@ -8,9 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
-<link rel="manifest" href="./manifest.webmanifest?v=66">
-<link rel="icon" href="./logo-spesen.png?v=66" type="image/png">
-<link rel="apple-touch-icon" href="./logo-spesen.png?v=66">
+<link rel="manifest" href="./manifest.webmanifest?v=67">
+<link rel="icon" href="./logo-spesen.png?v=67" type="image/png">
+<link rel="apple-touch-icon" href="./logo-spesen.png?v=67">
 <title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
@@ -2187,6 +2187,60 @@
     const url='https://www.google.com/maps/dir/?api=1&origin='+encodeURIComponent(start)+'&destination='+encodeURIComponent(dest)+'&travelmode=driving';
     window.open(url,'_blank','noopener,noreferrer');
   }
+  function openTeamGoogleMaps(kind){
+    const r=teamRouteState && teamRouteState.resolved;
+    if(!r){
+      $('routeStatus').textContent='Bitte zuerst die Gespann-Routen berechnen und übernehmen.';
+      $('routeStatus').className='status warn';
+      return;
+    }
+
+    let origin='', destination='', waypoints=[];
+
+    if(kind==='sr'){
+      origin=norm(r.srStart);
+      destination=norm(r.dest);
+
+      const order=Array.isArray(teamRouteState.order)?teamRouteState.order:[];
+      for(const id of order){
+        const wp=id==='sra1'?norm(r.a1Meet):id==='sra2'?norm(r.a2Meet):'';
+        if(wp && !sameAddressText(wp,destination)){
+          const last=waypoints[waypoints.length-1];
+          if(!last || !sameAddressText(last,wp)) waypoints.push(wp);
+        }
+      }
+    }else if(kind==='sra1'){
+      origin=norm(r.a1Home);
+      destination=teamRouteState.sra1Direct?norm(r.dest):norm(r.a1Meet);
+    }else if(kind==='sra2'){
+      origin=norm(r.a2Home);
+      destination=teamRouteState.sra2Direct?norm(r.dest):norm(r.a2Meet);
+    }
+
+    if(!origin||!destination){
+      $('routeStatus').textContent='Die benötigten Adressen für Google Maps sind nicht vollständig.';
+      $('routeStatus').className='status warn';
+      return;
+    }
+
+    let url='https://www.google.com/maps/dir/?api=1'
+      +'&origin='+encodeURIComponent(origin)
+      +'&destination='+encodeURIComponent(destination)
+      +'&travelmode=driving';
+
+    if(waypoints.length){
+      url+='&waypoints='+encodeURIComponent(waypoints.join('|'));
+    }
+
+    guideState.mapsOpened=true;
+    updateGuide();
+
+    const w=window.open(url,'_blank');
+    if(!w){
+      window.location.href=url;
+    }
+  }
+
   async function fetchRoutesMulti(points){
     const coords=points.map(p=>p.lon+','+p.lat).join(';');
     let url='https://router.project-osrm.org/route/v1/driving/'+coords+'?alternatives=3&steps=false&overview=false';
@@ -2779,7 +2833,7 @@
   // Web-App-Unterstützung (GitHub Pages / PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=66', {scope:'./'}).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=67', {scope:'./'}).catch(() => {});
     });
   }
 </script>
