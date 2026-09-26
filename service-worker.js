@@ -1,5 +1,5 @@
-const CACHE_NAME = 'spesenabrechnung-srg-msp-v69';
-const APP_SHELL = ['./','./index.html','./manifest.webmanifest','./logo-spesen.png'];
+const CACHE_NAME = 'spesenabrechnung-srg-msp-v70';
+const APP_SHELL = ['./','./index.html','./manifest.webmanifest','./logo-spesen.png','./sra-excel.js'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
 });
