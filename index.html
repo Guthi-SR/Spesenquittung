@@ -744,24 +744,7 @@
       <div class="privacy-note">Grundlage: Spesenordnungen 2026/27 von HFV und BFV sowie die lokal gepflegte „Sonstige Spesenordnung“ für weitere Funktionen. Sonderfälle werden nur automatisch gesetzt, wenn die nötigen Angaben eindeutig vorliegen.</div>
     </div>
 
-    <div class="panel archive-panel" id="archivePanel">
-      <h2>5. Spesenquittungen speichern &amp; laden</h2>
-      <div class="hint archive-note">
-        Die Quittungen werden <strong>nur lokal in diesem Browser</strong> gespeichert.
-        Zusätzlich kannst du jede Quittung als JSON-Datei sichern und später wieder laden und bearbeiten.
-        Der <strong>Steuer-Excel-Export</strong> listet alle gespeicherten Einsätze nach Datum auf und berücksichtigt nur deine eigenen Spesen und deine eigenen gefahrenen Kilometer.
-      </div>
-      <div class="archive-actions">
-        <button id="saveReceiptBrowserBtn" type="button">Im Browser speichern</button>
-        <button id="saveReceiptFileBtn" type="button" class="secondary">Als Datei speichern</button>
-        <button id="loadReceiptFileBtn" type="button" class="light">Datei laden</button>
-        <button id="exportReceiptArchiveBtn" type="button" class="light">Gesamtes Archiv sichern</button>
-        <button id="exportTaxExcelBtn" type="button" class="secondary">Steuer-Excel exportieren</button>
-        <input id="receiptFileInput" class="archive-file-input" type="file" accept=".json,application/json">
-      </div>
-      <div id="receiptArchiveStatus" class="status">Noch keine Spesenquittung gespeichert.</div>
-      <div id="receiptArchive" class="receipt-archive"></div>
-    </div>
+    
 
   </div>
 </section>
@@ -923,6 +906,29 @@
   </label>
 </div>
 <button id="printBtn" class="printbtn" type="button">Drucken / PDF</button>
+
+<section class="toolbar archive-toolbar">
+  <div class="toolbar-grid" style="grid-template-columns:1fr">
+    <div class="panel archive-panel" id="archivePanel">
+      <h2>5. Spesenquittungen speichern &amp; laden</h2>
+      <div class="hint archive-note">
+        Die Quittungen werden <strong>nur lokal in diesem Browser</strong> gespeichert.
+        Zusätzlich kannst du jede Quittung als JSON-Datei sichern und später wieder laden und bearbeiten.
+        Der <strong>Steuer-Excel-Export</strong> listet alle gespeicherten Einsätze nach Datum auf und berücksichtigt nur deine eigenen Spesen und deine eigenen gefahrenen Kilometer.
+      </div>
+      <div class="archive-actions">
+        <button id="saveReceiptBrowserBtn" type="button">Im Browser speichern</button>
+        <button id="saveReceiptFileBtn" type="button" class="secondary">Als Datei speichern</button>
+        <button id="loadReceiptFileBtn" type="button" class="light">Datei laden</button>
+        <button id="exportReceiptArchiveBtn" type="button" class="light">Gesamtes Archiv sichern</button>
+        <button id="exportTaxExcelBtn" type="button" class="secondary">Steuer-Excel exportieren</button>
+        <input id="receiptFileInput" class="archive-file-input" type="file" accept=".json,application/json">
+      </div>
+      <div id="receiptArchiveStatus" class="status">Noch keine Spesenquittung gespeichert.</div>
+      <div id="receiptArchive" class="receipt-archive"></div>
+    </div>
+  </div>
+</section>
 
 <script>
 (function(){
