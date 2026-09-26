@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spesenabrechnung-srg-msp-v71';
+const CACHE_NAME = 'spesenabrechnung-srg-msp-v72';
 const APP_SHELL = ['./','./index.html','./manifest.webmanifest','./logo-spesen.png','./sra-excel.js'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
@@ -18,5 +18,5 @@ self.addEventListener('fetch', event => {
     }).catch(()=>caches.match('./index.html')));
     return;
   }
-  event.respondWith(caches.match(req).then(cached=>cached||fetch(req)));
+  event.respondWith(caches.match(req,{ignoreSearch:true}).then(cached=>cached||fetch(req)));
 });
