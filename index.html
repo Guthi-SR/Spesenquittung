@@ -3735,6 +3735,7 @@
             const monthSelectWrap=document.createElement('label');
             monthSelectWrap.className='archive-month-select';
             monthSelectWrap.title='Alle Quittungen dieses Monats auswählen';
+            monthSelectWrap.addEventListener('click',ev=>ev.stopPropagation());
 
             const monthSelect=document.createElement('input');
             monthSelect.type='checkbox';
