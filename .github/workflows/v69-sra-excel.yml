@@ -1,0 +1,57 @@
+name: Apply v69 SRA Excel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/v69-sra-excel.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch web app
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path("index.html")
+          s = p.read_text(encoding="utf-8")
+          tag = '<script src="./sra-excel.js?v=69"></script>'
+          if tag not in s:
+              s = s.replace("</body>", tag + "\n</body>", 1)
+          for old in ("68","67","66","65"):
+              s = s.replace(f"manifest.webmanifest?v={old}", "manifest.webmanifest?v=69")
+              s = s.replace(f"service-worker.js?v={old}", "service-worker.js?v=69")
+              s = s.replace(f"logo-spesen.png?v={old}", "logo-spesen.png?v=69")
+          p.write_text(s, encoding="utf-8")
+
+          m = Path("manifest.webmanifest")
+          if m.exists():
+              x = m.read_text(encoding="utf-8")
+              for old in ("68","67","66","65"):
+                  x = x.replace(f"logo-spesen.png?v={old}", "logo-spesen.png?v=69")
+              m.write_text(x, encoding="utf-8")
+
+          sw = Path("service-worker.js")
+          if sw.exists():
+              x = sw.read_text(encoding="utf-8")
+              x = x.replace("spesenabrechnung-srg-msp-v68", "spesenabrechnung-srg-msp-v69")
+              x = x.replace("spesenabrechnung-srg-msp-v67", "spesenabrechnung-srg-msp-v69")
+              sw.write_text(x, encoding="utf-8")
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html manifest.webmanifest service-worker.js
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "v69: SRA Excel Import Export aktivieren"
+            git push
+          fi
