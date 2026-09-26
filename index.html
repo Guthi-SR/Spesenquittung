@@ -8,9 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
-<link rel="manifest" href="./manifest.webmanifest?v=73">
-<link rel="icon" href="./logo-spesen.png?v=73" type="image/png">
-<link rel="apple-touch-icon" href="./logo-spesen.png?v=73">
+<link rel="manifest" href="./manifest.webmanifest?v=74">
+<link rel="icon" href="./logo-spesen.png?v=74" type="image/png">
+<link rel="apple-touch-icon" href="./logo-spesen.png?v=74">
 <title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
@@ -690,18 +690,22 @@
           <label>Funktion / Rolle
             <select id="otherFunctionSelect">
               <option value="">Bitte auswählen …</option>
+              <option value="4 offizieller">4. Offizieller</option>
+              <option value="pate">Pate</option>
+              <option value="beo">BEO</option>
             </select>
           </label>
-          <div>
-            <strong>Sonstige Spesenordnung</strong><br>
-            <span style="font-size:11px;color:#5f6872">Eigene Funktionen wie 4. Offizieller, Pate oder BEO werden über eine Excel-Datei gepflegt.</span>
-          </div>
+          <label>Einsatzbereich
+            <select id="otherScopeSelect">
+              <option value="">Bitte auswählen …</option>
+              <option value="GRUPPE">Gruppenintern</option>
+              <option value="BEZIRK">Bezirk</option>
+            </select>
+          </label>
         </div>
-        <div class="other-fees-actions">
-          <button id="downloadOtherFeesExcelBtn" type="button" class="light">Sonstige-Excel herunterladen</button>
-          <button id="importOtherFeesExcelBtn" type="button" class="secondary">Sonstige-Excel importieren</button>
-          <input id="otherFeesExcelInput" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden>
-          <button id="resetOtherFeesBtn" type="button" class="light">Standard wiederherstellen</button>
+        <div class="other-fees-status">
+          <strong>Sonstige Spesenordnung – fest hinterlegt.</strong>
+          Die Beträge können von normalen Nutzern nicht geändert werden. Wenn Funktion oder Einsatzbereich aus der Einteilung nicht eindeutig hervorgehen, bitte hier auswählen.
         </div>
         <div id="otherFeesStatus" class="other-fees-status"></div>
       </div>
@@ -726,7 +730,7 @@
         <button id="feesCheckedBtn" type="button">Spesen geprüft</button>
         <button id="openHfvFeesBtn" class="light" type="button">HFV-Spesenordnung öffnen</button>
         <button id="openBfvFeesBtn" class="light" type="button">BFV-Spesenordnung öffnen</button>
-        <button id="openOtherFeesBtn" class="light" type="button">Sonstige-Spesenordnung</button>
+        <button id="openOtherFeesBtn" class="light" type="button">Sonstige-Spesenordnung anzeigen</button>
         <span id="feeStatus" class="status">Die Spesen werden beim Einlesen einer Einteilung automatisch geprüft.</span>
       </div>
       <div class="privacy-note">Grundlage: Spesenordnungen 2026/27 von HFV und BFV sowie die lokal gepflegte „Sonstige Spesenordnung“ für weitere Funktionen. Sonderfälle werden nur automatisch gesetzt, wenn die nötigen Angaben eindeutig vorliegen.</div>
@@ -1783,201 +1787,151 @@
   let mileageCapNotices=[];
 
 
-  // ---------- Sonstige Spesenordnung (Excel) ----------
-  const OTHER_FEES_KEY='srgMspOtherFeeRulesV1';
-  const DEFAULT_OTHER_FEE_RULES=[
-    {functionName:'4. Offizieller',keywords:['4. Offizieller','4. Off','Vierter Offizieller'],fee:30,kmRate:null,active:true,note:'Gruppenintern – 30,00 € Spesen'},
-    {functionName:'Pate',keywords:['Pate'],fee:null,kmRate:null,active:true,note:'Spesenbetrag in Excel ergänzen'},
-    {functionName:'BEO',keywords:['BEO','Beobachter','Beobachtung'],fee:null,kmRate:null,active:true,note:'Spesenbetrag in Excel ergänzen'}
+  // ---------- Sonstige Spesenordnung – fest aus Admin-Excel hinterlegt ----------
+  // Quelle (Admin-Vorgabe):
+  // 4. Offizieller · Gruppenintern = 30 €
+  // Pate · Gruppenintern = 20 €
+  // BEO · Bezirk = 26 € · max. 100 km einfache Fahrt
+  // 4. Offizieller · Bezirk = 26 € · max. 100 km einfache Fahrt
+  const FIXED_OTHER_FEE_RULES=[
+    {functionName:'4. Offizieller',functionKey:'4 offizieller',scope:'GRUPPE',fee:30,kmRate:null,simpleKmLimit:null,note:'Gruppenintern – 30,00 € Spesen'},
+    {functionName:'Pate',functionKey:'pate',scope:'GRUPPE',fee:20,kmRate:null,simpleKmLimit:null,note:'Gruppenintern – 20,00 € Spesen'},
+    {functionName:'BEO',functionKey:'beo',scope:'BEZIRK',fee:26,kmRate:null,simpleKmLimit:100,note:'Bezirk – 26,00 € Spesen · max. 100 km einfache Fahrt'},
+    {functionName:'4. Offizieller',functionKey:'4 offizieller',scope:'BEZIRK',fee:26,kmRate:null,simpleKmLimit:100,note:'Bezirk – 26,00 € Spesen · max. 100 km einfache Fahrt'}
   ];
-  function cloneOtherFeeRules(rules){
-    return (rules||[]).map(r=>({
-      functionName:norm(r.functionName),
-      keywords:Array.isArray(r.keywords)?r.keywords.map(norm).filter(Boolean):[],
-      fee:(r.fee==null||r.fee==='')?null:Number(r.fee),
-      kmRate:(r.kmRate==null||r.kmRate==='')?null:Number(r.kmRate),
-      active:r.active!==false,
-      note:norm(r.note)
-    })).filter(r=>r.functionName);
-  }
-  function loadOtherFeeRules(){
-    try{
-      const raw=localStorage.getItem(OTHER_FEES_KEY);
-      if(raw){
-        const parsed=JSON.parse(raw);
-        if(Array.isArray(parsed)&&parsed.length) return cloneOtherFeeRules(parsed);
-      }
-    }catch(e){}
-    return cloneOtherFeeRules(DEFAULT_OTHER_FEE_RULES);
-  }
-  function storeOtherFeeRules(rules){
-    const clean=cloneOtherFeeRules(rules);
-    localStorage.setItem(OTHER_FEES_KEY,JSON.stringify(clean));
-    refreshOtherFunctionSelect();
-    updateOtherFeesStatus();
-    return clean;
-  }
+
   function otherRuleKey(v){
     return norm(v).toLocaleLowerCase('de-DE')
       .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
       .replace(/[^a-z0-9äöüß]+/gi,' ')
       .replace(/\s+/g,' ').trim();
   }
-  function otherRuleMatches(rule,text){
-    if(!rule||rule.active===false) return false;
-    const hay=otherRuleKey(text);
-    if(!hay) return false;
-    return [rule.functionName,...(rule.keywords||[])].filter(Boolean).some(k=>{
-      const needle=otherRuleKey(k);
-      return needle && (hay===needle || hay.includes(needle));
-    });
+  function fixedOtherFunctionFromText(text){
+    const t=otherRuleKey(text);
+    if(!t)return '';
+    if(/(?:^|\s)(?:4\s*off(?:izieller)?|vierter\s+offizieller)(?:\s|$)/i.test(t))return '4 offizieller';
+    if(/(?:^|\s)pate(?:\s|$)/i.test(t))return 'pate';
+    if(/(?:^|\s)(?:beo|beobachter|beobachtung)(?:\s|$)/i.test(t))return 'beo';
+    return '';
   }
-  function findOtherRuleByText(text){ return loadOtherFeeRules().find(r=>otherRuleMatches(r,text))||null; }
-  function detectedOtherRule(p){ return (!p||!norm(p.assignmentFunction))?null:findOtherRuleByText(p.assignmentFunction); }
+  function detectedOtherFunctionKey(p){
+    if(!p)return '';
+    return fixedOtherFunctionFromText([p.assignmentFunction,p.rawText].filter(Boolean).join(' '));
+  }
+  function detectedOtherRule(p){
+    const key=detectedOtherFunctionKey(p);
+    return key?FIXED_OTHER_FEE_RULES.find(r=>r.functionKey===key)||null:null;
+  }
+  function detectOtherScope(p){
+    if(!p)return '';
+    const text=norm([p.assignmentFunction,p.rawText].filter(Boolean).join(' '));
+    const group=/\bgruppenintern\b|\bgruppen[- ]?intern\b|\bgruppe\s+intern\b|\bgruppeninterner\b|\bgruppeninterne\b/i.test(text);
+    const district=/\bbezirk\b|\bbezirksbeobachtung\b|\bbeobachtung\s+bezirk\b|\bbezirkseinsatz\b|\bbezirkseinteilung\b/i.test(text);
+    if(group&&!district)return 'GRUPPE';
+    if(district&&!group)return 'BEZIRK';
+    return '';
+  }
+  function selectedOtherFunctionKey(p){
+    const select=$('otherFunctionSelect');
+    if(select&&select.value)return select.value;
+    return detectedOtherFunctionKey(p);
+  }
+  function selectedOtherScope(p){
+    const select=$('otherScopeSelect');
+    if(select&&select.value)return select.value;
+    return detectOtherScope(p);
+  }
   function selectedOtherRule(p){
-    const rules=loadOtherFeeRules(), select=$('otherFunctionSelect');
-    if(select&&select.value){
-      const found=rules.find(r=>otherRuleKey(r.functionName)===select.value);
-      if(found)return found;
-    }
-    return detectedOtherRule(p)||null;
+    const functionKey=selectedOtherFunctionKey(p);
+    const scope=selectedOtherScope(p);
+    if(!functionKey||!scope)return null;
+    return FIXED_OTHER_FEE_RULES.find(r=>r.functionKey===functionKey&&r.scope===scope)||null;
   }
   function refreshOtherFunctionSelect(preferred=''){
     const select=$('otherFunctionSelect'); if(!select)return;
-    const old=preferred||select.value;
-    const rules=loadOtherFeeRules().filter(r=>r.active!==false);
-    select.innerHTML='<option value="">Bitte auswählen …</option>'+rules.map(r=>{
-      const key=otherRuleKey(r.functionName);
-      return '<option value="'+key.replace(/"/g,'&quot;')+'">'+r.functionName+'</option>';
-    }).join('');
-    if(old&&[...select.options].some(o=>o.value===old))select.value=old;
+    if(preferred&&[...select.options].some(o=>o.value===preferred))select.value=preferred;
   }
-  function updateOtherFeesStatus(){
+  function updateOtherFeesStatus(p=lastParsedAssignment){
     const el=$('otherFeesStatus'); if(!el)return;
-    const rules=loadOtherFeeRules();
-    const ready=rules.filter(r=>r.active!==false&&r.fee!=null&&r.fee!==''&&Number.isFinite(Number(r.fee))).length;
-    const missing=rules.filter(r=>r.active!==false&&(r.fee==null||r.fee===''||!Number.isFinite(Number(r.fee)))).map(r=>r.functionName);
-    el.textContent=rules.length+' Funktion'+(rules.length===1?'':'en')+' hinterlegt · '+ready+' mit Spesenbetrag'+(missing.length?' · Betrag fehlt bei: '+missing.join(', '):'')+'.';
+    const fn=selectedOtherFunctionKey(p);
+    const scope=selectedOtherScope(p);
+    const fnLabel=fn==='4 offizieller'?'4. Offizieller':fn==='pate'?'Pate':fn==='beo'?'BEO':'';
+    const scopeLabel=scope==='GRUPPE'?'Gruppenintern':scope==='BEZIRK'?'Bezirk':'';
+
+    if(!fn){
+      el.textContent='Bitte Funktion/Rolle auswählen.';
+      el.className='other-fees-status';
+      return;
+    }
+    if(!scope){
+      el.textContent=fnLabel+' erkannt. Bitte auswählen: Gruppenintern oder Bezirk.';
+      el.className='other-fees-status';
+      return;
+    }
+    const rule=FIXED_OTHER_FEE_RULES.find(r=>r.functionKey===fn&&r.scope===scope);
+    if(!rule){
+      el.textContent='Für '+fnLabel+' · '+scopeLabel+' ist in deiner hinterlegten Vorgabe kein Spesensatz definiert.';
+      el.className='other-fees-status';
+      return;
+    }
+    el.textContent=fnLabel+' · '+scopeLabel+' → '+Number(rule.fee).toFixed(2).replace('.',',')+' € Spesen'
+      +(rule.simpleKmLimit!=null?' · max. '+rule.simpleKmLimit+' km einfache Fahrt':'')
+      +'.';
+    el.className='other-fees-status';
   }
   function updateOtherFeesUI(p){
     const box=$('otherFeesBox'); if(!box)return;
     const association=currentAssociationFor(p||lastParsedAssignment);
     box.hidden=association!=='SONSTIGE'&&$('associationSelect').value!=='SONSTIGE';
     if(box.hidden)return;
-    refreshOtherFunctionSelect();
-    const detected=detectedOtherRule(p||lastParsedAssignment);
-    if(detected&&!$('otherFunctionSelect').value)$('otherFunctionSelect').value=otherRuleKey(detected.functionName);
-    updateOtherFeesStatus();
+
+    const detectedFn=detectedOtherFunctionKey(p||lastParsedAssignment);
+    if(detectedFn&&!$('otherFunctionSelect').value)$('otherFunctionSelect').value=detectedFn;
+    const detectedScope=detectOtherScope(p||lastParsedAssignment);
+    if(detectedScope&&!$('otherScopeSelect').value)$('otherScopeSelect').value=detectedScope;
+
+    updateOtherFeesStatus(p||lastParsedAssignment);
   }
   function otherRuleKmRate(p){
     const rule=selectedOtherRule(p||lastParsedAssignment);
     return rule&&rule.kmRate!=null&&Number.isFinite(Number(rule.kmRate))&&Number(rule.kmRate)>0?Number(rule.kmRate):null;
   }
-  function otherFees(p){
+  function currentOtherKmLimit(p=lastParsedAssignment){
     const rule=selectedOtherRule(p);
-    if(!rule)return {warning:'Sonstige Spesenordnung ausgewählt. Bitte die Funktion/Rolle auswählen.'};
-    if(rule.fee==null||rule.fee==='')return {warning:'Für „'+rule.functionName+'“ ist in der Sonstigen Spesenordnung noch kein Spesenbetrag hinterlegt.'};
-    const fee=Number(rule.fee);
-    if(!Number.isFinite(fee)||fee<0)return {warning:'Für „'+rule.functionName+'“ ist kein gültiger Spesenbetrag hinterlegt.'};
-    return {association:'SONSTIGE',sr:fee,sra:null,label:rule.functionName,surcharge:false,kmRate:otherRuleKmRate(p)};
+    return rule&&rule.simpleKmLimit!=null&&Number.isFinite(Number(rule.simpleKmLimit))?Number(rule.simpleKmLimit):null;
   }
-  function ensureOtherXlsx(){
-    if(typeof XLSX!=='undefined'&&XLSX&&XLSX.utils)return true;
-    $('otherFeesStatus').textContent='Excel-Funktion konnte nicht geladen werden. Bitte Internetverbindung prüfen und die App einmal neu öffnen.';
-    return false;
-  }
-  function exportOtherFeesExcel(){
-    if(!ensureOtherXlsx())return;
-    const rows=loadOtherFeeRules().map(r=>({
-      'Funktion':r.functionName||'',
-      'Suchbegriffe / Kennungen':(r.keywords||[]).join(';'),
-      'Spesen (€)':r.fee==null?'':r.fee,
-      'KM-Satz (€/km)':r.kmRate==null?'':r.kmRate,
-      'Aktiv':r.active===false?'Nein':'Ja',
-      'Bemerkung':r.note||''
-    }));
-    const ws=XLSX.utils.json_to_sheet(rows,{header:['Funktion','Suchbegriffe / Kennungen','Spesen (€)','KM-Satz (€/km)','Aktiv','Bemerkung'],skipHeader:false});
-    ws['!cols']=[{wch:24},{wch:46},{wch:14},{wch:16},{wch:10},{wch:36}];
-    const info=XLSX.utils.aoa_to_sheet([
-      ['Sonstige Spesenordnung – SRG Main-Spessart'],
-      ['Die Überschriften im Blatt „Spesenordnung“ bitte nicht umbenennen.'],
-      ['Mehrere Suchbegriffe mit Semikolon trennen.'],
-      ['Leerer KM-Satz = Standard-Kilometersatz der App.'],
-      ['4. Offizieller ist gruppenintern mit 30,00 € vorbelegt. Pate/BEO können ergänzt werden.']
-    ]);
-    info['!cols']=[{wch:90}];
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,'Spesenordnung');
-    XLSX.utils.book_append_sheet(wb,info,'Hinweise');
-    XLSX.writeFile(wb,'Sonstige_Spesenordnung_SRG_MSP.xlsx',{compression:true});
-    $('otherFeesStatus').textContent='Sonstige Spesenordnung wurde als Excel-Datei exportiert.';
-  }
-  function excelHeaderValue(row,aliases){
-    if(!row||typeof row!=='object')return '';
-    const keys=Object.keys(row);
-    for(const alias of aliases){
-      const wanted=otherRuleKey(alias);
-      const hit=keys.find(k=>otherRuleKey(k)===wanted);
-      if(hit!=null)return hit;
+  function otherFees(p){
+    const fn=selectedOtherFunctionKey(p);
+    const scope=selectedOtherScope(p);
+    const fnLabel=fn==='4 offizieller'?'4. Offizieller':fn==='pate'?'Pate':fn==='beo'?'BEO':'';
+
+    if(!fn)return {warning:'Sonstige Spesenordnung: Bitte Funktion/Rolle auswählen.'};
+    if(!scope){
+      try{$('otherScopeSelect').focus()}catch(e){}
+      return {warning:fnLabel+' erkannt. Bitte angeben, ob der Einsatz gruppenintern oder im Bezirk erfolgt.'};
     }
-    return '';
-  }
-  async function importOtherFeesExcel(file){
-    if(!file||!ensureOtherXlsx())return;
-    try{
-      const buf=await file.arrayBuffer();
-      const wb=XLSX.read(buf,{type:'array',raw:false});
-      const sheetName=wb.SheetNames.includes('Spesenordnung')?'Spesenordnung':wb.SheetNames[0];
-      if(!sheetName)throw new Error('Kein Tabellenblatt');
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{defval:'',raw:false,blankrows:false});
-      if(!rows.length)throw new Error('Keine Daten');
-      const first=rows[0];
-      const fnCol=excelHeaderValue(first,['Funktion']);
-      const keyCol=excelHeaderValue(first,['Suchbegriffe / Kennungen','Suchbegriffe','Kennungen']);
-      const feeCol=excelHeaderValue(first,['Spesen (€)','Spesen','Spesenbetrag']);
-      const kmCol=excelHeaderValue(first,['KM-Satz (€/km)','KM-Satz','Kilometersatz']);
-      const activeCol=excelHeaderValue(first,['Aktiv']);
-      const noteCol=excelHeaderValue(first,['Bemerkung','Hinweis']);
-      if(!fnCol)throw new Error('Spalte Funktion fehlt');
-      const rules=[];
-      for(const row of rows){
-        const functionName=norm(row[fnCol]); if(!functionName)continue;
-        const keyText=keyCol?norm(row[keyCol]):'';
-        const feeText=feeCol?norm(String(row[feeCol]??'')):'';
-        const kmText=kmCol?norm(String(row[kmCol]??'')):'';
-        const activeText=activeCol?norm(row[activeCol]).toLowerCase():'ja';
-        rules.push({
-          functionName,
-          keywords:keyText.split(';').map(norm).filter(Boolean),
-          fee:feeText?num(feeText):null,
-          kmRate:kmText?num(kmText):null,
-          active:!['nein','no','0','false','inaktiv'].includes(activeText),
-          note:noteCol?norm(row[noteCol]):''
-        });
-      }
-      if(!rules.length)throw new Error('Keine Funktionen');
-      storeOtherFeeRules(rules);
-      updateOtherFeesUI(lastParsedAssignment);
-      if(lastParsedAssignment&&currentAssociationFor(lastParsedAssignment)==='SONSTIGE')applyAutomaticFees(lastParsedAssignment);
-      $('otherFeesStatus').textContent='Excel importiert: '+rules.length+' Funktion'+(rules.length===1?'':'en')+' übernommen.';
-    }catch(err){
-      console.error(err);
-      $('otherFeesStatus').textContent='Excel konnte nicht eingelesen werden. Bitte die Sonstige-Spesenordnung mit den vorgesehenen Spalten verwenden.';
-    }finally{
-      if($('otherFeesExcelInput'))$('otherFeesExcelInput').value='';
+    const rule=FIXED_OTHER_FEE_RULES.find(r=>r.functionKey===fn&&r.scope===scope);
+    if(!rule){
+      const scopeLabel=scope==='GRUPPE'?'gruppenintern':'im Bezirk';
+      return {warning:'Für '+fnLabel+' '+scopeLabel+' ist in der von dir hinterlegten Sonstigen Spesenordnung kein Spesensatz definiert.'};
     }
-  }
-  function resetOtherFees(){
-    if(!confirm('Die Sonstige Spesenordnung auf die Standardwerte zurücksetzen? Eigene Änderungen werden dabei ersetzt.'))return;
-    localStorage.removeItem(OTHER_FEES_KEY);
-    refreshOtherFunctionSelect(); updateOtherFeesStatus(); updateOtherFeesUI(lastParsedAssignment);
-    if(lastParsedAssignment&&currentAssociationFor(lastParsedAssignment)==='SONSTIGE')applyAutomaticFees(lastParsedAssignment);
+    return {
+      association:'SONSTIGE',
+      sr:Number(rule.fee),
+      sra:null,
+      label:rule.functionName+' · '+(rule.scope==='GRUPPE'?'Gruppenintern':'Bezirk'),
+      surcharge:false,
+      kmRate:otherRuleKmRate(p),
+      simpleKmLimit:rule.simpleKmLimit
+    };
   }
   function updateReceiptRoleLabels(p){
     const association=p?currentAssociationFor(p):'';
     const rule=association==='SONSTIGE'?selectedOtherRule(p):null;
+    const fn=selectedOtherFunctionKey(p);
+    const fnLabel=rule?rule.functionName:(fn==='4 offizieller'?'4. Offizieller':fn==='pate'?'Pate':fn==='beo'?'BEO':'');
     if($('receiptTitle'))$('receiptTitle').textContent=association==='SONSTIGE'?'Spesenquittung':'Spesenquittung für Schiedsrichter';
-    if($('srExpenseLabel'))$('srExpenseLabel').textContent=association==='SONSTIGE'&&rule?'Aufwandsentschädigung / Spesen für '+rule.functionName:'Aufwandsentschädigung / Spesen für Schiedsrichter';
+    if($('srExpenseLabel'))$('srExpenseLabel').textContent=association==='SONSTIGE'&&fnLabel?'Aufwandsentschädigung / Spesen für '+fnLabel:'Aufwandsentschädigung / Spesen für Schiedsrichter';
   }
 
   function feeText(p){
@@ -1989,8 +1943,11 @@
   // kann anschließend der in der Mail enthaltene Spielort geographisch geprüft werden.
   function detectAssociationDetailed(p){
     if(!p) return {association:'',reason:'Keine Einteilung vorhanden.',confidence:0};
-    const otherRule=detectedOtherRule(p);
-    if(otherRule) return {association:'SONSTIGE',reason:'Funktion/Rolle erkannt: '+otherRule.functionName,confidence:100};
+    const otherFunctionKey=detectedOtherFunctionKey(p);
+    if(otherFunctionKey){
+      const label=otherFunctionKey==='4 offizieller'?'4. Offizieller':otherFunctionKey==='pate'?'Pate':'BEO';
+      return {association:'SONSTIGE',reason:'Funktion/Rolle erkannt: '+label,confidence:100};
+    }
     if(p._geoAssociation){
       return {association:p._geoAssociation,reason:p._geoAssociationReason||'über den Spielort aus der Einteilung erkannt',confidence:90};
     }
@@ -2338,6 +2295,31 @@
       }
     }
 
+    if(association==='SONSTIGE'){
+      const simpleLimit=currentOtherKmLimit(lastParsedAssignment);
+      if(simpleLimit!=null){
+        const maxKm=maxTotalKm(simpleLimit);
+        const srRate=num($('srRate').value), teamRate=num($('teamRate').value);
+        const actualTotal=isTeam?(actualSolo+actualShared):actualSolo;
+        if(actualTotal>maxKm){
+          if(isTeam){
+            const cappedSolo=Math.min(actualSolo,maxKm);
+            const cappedTeam=Math.max(0,Math.min(actualShared,maxKm-cappedSolo));
+            $('srKm').value=String(cappedSolo);
+            $('teamKm').value=String(cappedTeam);
+            const actualCost=costForKm(actualSolo,srRate)+costForKm(actualShared,teamRate);
+            const cappedCost=costForKm(cappedSolo,srRate)+costForKm(cappedTeam,teamRate);
+            const rule=selectedOtherRule(lastParsedAssignment);
+            mileageCapNotices.push({person:rule?rule.functionName:'Einsatz',actualKm:actualTotal,maxKm,simpleLimit,actualCost,cappedCost});
+          }else{
+            $('srKm').value=String(maxKm);
+            const rule=selectedOtherRule(lastParsedAssignment);
+            mileageCapNotices.push({person:rule?rule.functionName:'Einsatz',actualKm:actualSolo,maxKm,simpleLimit,actualCost:costForKm(actualSolo,srRate),cappedCost:costForKm(maxKm,srRate)});
+          }
+        }
+      }
+    }
+
     calc();
     if(lastParsedAssignment) updateKmLimitHint(lastParsedAssignment);
   }
@@ -2395,9 +2377,21 @@
       return;
     }
     if(association==='SONSTIGE'){
-      const rule=selectedOtherRule(p);
+      const fn=selectedOtherFunctionKey(p), scope=selectedOtherScope(p), rule=selectedOtherRule(p);
       const rate=associationBaseKmRate();
-      showHint('<strong>Sonstige Spesenordnung:</strong> Für '+(rule?'<strong>'+rule.functionName+'</strong>':'die gewählte Funktion')+' ist keine Kilometer-Obergrenze hinterlegt. Verwendeter KM-Satz: <strong>'+fmt(rate)+' €/km</strong>.');
+      if(fn&&!scope){
+        showHint('<strong>Sonstige Spesenordnung:</strong> Bitte zuerst Gruppenintern oder Bezirk auswählen.',true);
+        return;
+      }
+      if(!rule){
+        showHint('<strong>Sonstige Spesenordnung:</strong> Für die gewählte Kombination ist keine Regel hinterlegt.',true);
+        return;
+      }
+      if(rule.simpleKmLimit!=null){
+        showHint('<strong>Sonstige Spesenordnung:</strong> '+rule.functionName+' · '+(rule.scope==='GRUPPE'?'Gruppenintern':'Bezirk')+' · maximal <strong>'+rule.simpleKmLimit+' km einfache Fahrt</strong>. KM-Satz: <strong>'+fmt(rate)+' €/km</strong>.');
+      }else{
+        showHint('<strong>Sonstige Spesenordnung:</strong> '+rule.functionName+' · '+(rule.scope==='GRUPPE'?'Gruppenintern':'Bezirk')+' · keine Kilometer-Obergrenze hinterlegt. KM-Satz: <strong>'+fmt(rate)+' €/km</strong>.');
+      }
       return;
     }
 
@@ -3115,6 +3109,8 @@
   function applyParsed(){
     const text=$('mailText').value; if(!norm(text)){ $('status').textContent='Bitte zuerst eine Einteilungsmail laden oder Text einfügen.'; $('status').className='status warn'; return }
     const p=parseAssignment(text); lastParsedAssignment=p; activeReceiptId=null; clearMileageActualState(); let count=0;
+    if($('otherFunctionSelect'))$('otherFunctionSelect').value='';
+    if($('otherScopeSelect'))$('otherScopeSelect').value='';
     guideState.parsed=true;
     guideState.addressesChecked=false;
     guideState.routeRequested=false;
@@ -3144,11 +3140,13 @@
       autoTeamChanged=true;
     }
 
-    const detectedRole=detectedOtherRule(p);
-    if(detectedRole){
-      refreshOtherFunctionSelect(otherRuleKey(detectedRole.functionName));
-      $('otherFunctionSelect').value=otherRuleKey(detectedRole.functionName);
+    const detectedRoleKey=detectedOtherFunctionKey(p);
+    if(detectedRoleKey){
+      refreshOtherFunctionSelect(detectedRoleKey);
+      $('otherFunctionSelect').value=detectedRoleKey;
     }
+    const detectedScope=detectOtherScope(p);
+    if(detectedScope)$('otherScopeSelect').value=detectedScope;
     const extras=[p.assignmentFunction&&('Funktion: '+p.assignmentFunction),p.competition&&('Spielklasse: '+p.competition),p.league&&('Liga: '+p.league),p.teamType&&('Mannschaftsart: '+p.teamType),p.time&&('Anstoß: '+p.time),p.sra1&&('SRA 1: '+p.sra1),p.sra2&&('SRA 2: '+p.sra2)].filter(Boolean).join(' · '); $('mailMeta').textContent=extras;
     $('status').textContent=count?('Übernommen: '+count+' Feld'+(count===1?'':'er')+'.'+(srStartFromDefaults?' SR wurde den persönlichen Stammdaten eindeutig zugeordnet; die Stammdaten-Adresse wurde als Startpunkt SR übernommen.':'')+(autoTeamChanged?' Fahrtart wurde automatisch auf Gespann gestellt.':'')+(storedAssistants?' SRA wurden im Verzeichnis gespeichert.':'')+(restoredSraHomes?' '+restoredSraHomes+' gespeicherte SRA-Adresse'+(restoredSraHomes===1?'':'n')+' übernommen.':'')+' Bitte kurz prüfen, bevor du druckst.'):'Es konnten keine passenden Felder erkannt werden. Du kannst die Angaben trotzdem manuell eintragen.'; $('status').className='status '+(count?'ok':'warn');
     updateAssociationAutoInfo(p);
@@ -3250,7 +3248,8 @@
         place:archiveText($('place').value),
         league:archiveText(lastParsedAssignment&&lastParsedAssignment.league),
         competition:archiveText(lastParsedAssignment&&lastParsedAssignment.competition),
-        function:archiveText(lastParsedAssignment&&lastParsedAssignment.assignmentFunction) || (lastParsedAssignment&&currentAssociationFor(lastParsedAssignment)==='SONSTIGE'&&selectedOtherRule(lastParsedAssignment)?selectedOtherRule(lastParsedAssignment).functionName:''),
+        function:archiveText(lastParsedAssignment&&lastParsedAssignment.assignmentFunction) || (lastParsedAssignment&&currentAssociationFor(lastParsedAssignment)==='SONSTIGE'&&selectedOtherFunctionKey(lastParsedAssignment)?(selectedOtherFunctionKey(lastParsedAssignment)==='4 offizieller'?'4. Offizieller':selectedOtherFunctionKey(lastParsedAssignment)==='pate'?'Pate':'BEO'):''),
+        functionScope:(lastParsedAssignment&&currentAssociationFor(lastParsedAssignment)==='SONSTIGE')?(selectedOtherScope(lastParsedAssignment)==='GRUPPE'?'Gruppenintern':selectedOtherScope(lastParsedAssignment)==='BEZIRK'?'Bezirk':''):'',
         total:archiveText($('total').value),
         referee:refName
       },
@@ -3636,7 +3635,7 @@
       return {
         date,
         month:/^\d{4}-\d{2}/.test(archiveText(s.date))?archiveText(s.date).slice(0,7):'',
-        role:archiveText(s.function),
+        role:[archiveText(s.function),archiveText(s.functionScope)].filter(Boolean).join(' · '),
         home:archiveText(s.home),away:archiveText(s.away),place:archiveText(s.place),
         competition:archiveText(s.competition||s.league),
         fee:taxNumber(taxControlValue(r,'srFee')),
@@ -3811,10 +3810,6 @@
   });
   $('saveDefaults').addEventListener('click',saveDefaults);
   $('recalcFeesBtn').addEventListener('click',()=>applyAutomaticFees(lastParsedAssignment));
-  if($('downloadOtherFeesExcelBtn'))$('downloadOtherFeesExcelBtn').addEventListener('click',exportOtherFeesExcel);
-  if($('importOtherFeesExcelBtn'))$('importOtherFeesExcelBtn').addEventListener('click',()=>{if(ensureOtherXlsx())$('otherFeesExcelInput').click()});
-  if($('otherFeesExcelInput'))$('otherFeesExcelInput').addEventListener('change',()=>importOtherFeesExcel($('otherFeesExcelInput').files&&$('otherFeesExcelInput').files[0]));
-  if($('resetOtherFeesBtn'))$('resetOtherFeesBtn').addEventListener('click',resetOtherFees);
   if($('openOtherFeesBtn'))$('openOtherFeesBtn').addEventListener('click',()=>{
     $('associationSelect').value='SONSTIGE';
     updateOtherFeesUI(lastParsedAssignment);
@@ -3822,8 +3817,15 @@
     $('otherFeesBox').scrollIntoView({behavior:'smooth',block:'center'});
   });
   if($('otherFunctionSelect'))$('otherFunctionSelect').addEventListener('change',()=>{
-    updateTeamMileageRuleUI(); updateKmLimitHint(lastParsedAssignment); updateReceiptRoleLabels(lastParsedAssignment);
+    updateOtherFeesStatus(lastParsedAssignment); updateTeamMileageRuleUI(); updateKmLimitHint(lastParsedAssignment); updateReceiptRoleLabels(lastParsedAssignment);
     if(lastParsedAssignment)applyAutomaticFees(lastParsedAssignment);
+  });
+  if($('otherScopeSelect'))$('otherScopeSelect').addEventListener('change',()=>{
+    updateOtherFeesStatus(lastParsedAssignment); updateTeamMileageRuleUI(); updateKmLimitHint(lastParsedAssignment); updateReceiptRoleLabels(lastParsedAssignment);
+    if(lastParsedAssignment){
+      applyAutomaticFees(lastParsedAssignment);
+      if(mileageStateHasValues())applyMileageCaps();
+    }
   });
   $('openHfvFeesBtn').addEventListener('click',()=>openEmbeddedFeePdf('HFV'));
   $('openBfvFeesBtn').addEventListener('click',()=>openEmbeddedFeePdf('BFV'));
@@ -4001,7 +4003,7 @@
   });
   updateTravelRateVisibility();
   ids.forEach(id=>{const el=$(id); if(el && !el.readOnly)el.addEventListener('change',()=>{if(id!=='total')calc()})});
-  loadDefaults();syncMeetingPoint();setTravelMode();refreshOtherFunctionSelect();updateOtherFeesStatus();updateTeamMileageRuleUI();renderSraDirectory();updateMeetingShortcutState(1);updateMeetingShortcutState(2);calc();renderReceiptArchive();
+  loadDefaults();syncMeetingPoint();setTravelMode();refreshOtherFunctionSelect();updateOtherFeesStatus(null);updateTeamMileageRuleUI();renderSraDirectory();updateMeetingShortcutState(1);updateMeetingShortcutState(2);calc();renderReceiptArchive();
   updateGuide();
   fitReceiptPreview();
   window.addEventListener('resize',fitReceiptPreview);
@@ -4013,7 +4015,7 @@
   // Web-App-Unterstützung (GitHub Pages / PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=73', {scope:'./'}).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=74', {scope:'./'}).catch(() => {});
     });
   }
 </script>
