@@ -3557,7 +3557,7 @@
         label:'Pate'+(scopeLabel?' · '+scopeLabel:' · Bereich unklar'),
         role:'Pate',
         scope:scopeLabel,
-        order:scopeCode==='GRUPPE'?30:scopeCode==='BEZIRK'?31:39
+        order:scopeCode==='BEZIRK'?30:scopeCode==='GRUPPE'?31:39
       };
     }
     if(/4 offizieller|4 off|vierter offizieller/.test(fn)){
@@ -3566,7 +3566,7 @@
         label:'4. Offizieller'+(scopeLabel?' · '+scopeLabel:' · Bereich unklar'),
         role:'4. Offizieller',
         scope:scopeLabel,
-        order:scopeCode==='GRUPPE'?40:scopeCode==='BEZIRK'?41:49
+        order:scopeCode==='BEZIRK'?40:scopeCode==='GRUPPE'?41:49
       };
     }
     if(/beo|beobachter|beobachtung/.test(fn)){
@@ -3575,7 +3575,7 @@
         label:'BEO'+(scopeLabel?' · '+scopeLabel:' · Bereich unklar'),
         role:'BEO',
         scope:scopeLabel,
-        order:scopeCode==='GRUPPE'?50:scopeCode==='BEZIRK'?51:59
+        order:scopeCode==='BEZIRK'?50:scopeCode==='GRUPPE'?51:59
       };
     }
 
@@ -3628,7 +3628,7 @@
     if(!records.length){
       const empty=document.createElement('div');
       empty.className='archive-empty';
-      empty.textContent='Noch keine gespeicherten Spesenquittungen. Nach dem Speichern werden sie nach Funktion, Monat und Datum sortiert.';
+      empty.textContent='Noch keine gespeicherten Spesenquittungen. Nach dem Speichern werden sie nach Funktion, Einsatzbereich, Monat und Datum sortiert.';
       box.appendChild(empty);
       return;
     }
