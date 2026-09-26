@@ -8,9 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
-<link rel="manifest" href="./manifest.webmanifest?v=80">
-<link rel="icon" href="./logo-spesen.png?v=80" type="image/png">
-<link rel="apple-touch-icon" href="./logo-spesen.png?v=80">
+<link rel="manifest" href="./manifest.webmanifest?v=81">
+<link rel="icon" href="./logo-spesen.png?v=81" type="image/png">
+<link rel="apple-touch-icon" href="./logo-spesen.png?v=81">
 <title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
@@ -1710,6 +1710,15 @@
     localStorage.setItem('spesenDefaults',JSON.stringify(d)); loadDefaults(); calc(); $('status').textContent='Stammdaten wurden lokal im Browser gespeichert.'; $('status').className='status ok';
   }
   function num(v){return parseFloat(String(v||'').replace(/\./g,'').replace(',','.').replace(/[^0-9.-]/g,''))||0}
+  function mailFeeAmount(v){
+    const text=String(v||'').replace(/\u00a0/g,' ').trim();
+    if(!text)return 0;
+    const euro=text.match(/(-?\d{1,5}(?:[.,]\d{1,2})?)\s*€/);
+    const raw=euro?euro[1]:(text.match(/-?\d{1,5}(?:[.,]\d{1,2})?/)||[])[0];
+    if(!raw)return 0;
+    const n=parseFloat(String(raw).replace(',','.'));
+    return Number.isFinite(n)?n:0;
+  }
   function fmt(n){return n? n.toFixed(2).replace('.',',') : ''}
   function travel(prefix){const km=num($(prefix+'Km').value), rate=num($(prefix+'Rate').value); if(km&&rate)$(prefix+'Travel').value=fmt(km*rate)}
   function calc(){
@@ -2665,7 +2674,7 @@
       $('feeSummary').textContent=association+' · automatische Zuordnung nicht eindeutig.';
       $('feeStatus').textContent=result.warning; $('feeStatus').className='status warn'; calc(); return;
     }
-    const directFee=num(p.srFee);
+    const directFee=association==='SONSTIGE'?0:mailFeeAmount(p.srFee);
     const srValue=directFee>0?directFee:result.sr;
     setFeeField('srFee',srValue);
     if(association==='SONSTIGE'&&result.kmRate!=null)$('srRate').value=fmt(result.kmRate);
@@ -2692,6 +2701,7 @@
       }
     }
     if(directFee>0) parts.push('SR-Spesen direkt aus der Einteilung übernommen');
+    else if(association==='SONSTIGE'&&p.srFee) parts.push('SR-Spesen aus der Einteilung ignoriert – eigene Funktion wird nach Sonstiger Spesenordnung abgerechnet');
     $('feeSummary').textContent=parts.join(' · ');
     $('feeStatus').textContent='Spesen automatisch übernommen. Bitte Sonderfälle vor dem Drucken kurz prüfen.';
     $('feeStatus').className='status ok';
@@ -4437,7 +4447,7 @@
   // Web-App-Unterstützung (GitHub Pages / PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=80', {scope:'./'}).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=81', {scope:'./'}).catch(() => {});
     });
   }
 </script>
