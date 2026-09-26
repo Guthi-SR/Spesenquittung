@@ -3007,3 +3007,192 @@
     }
     updateGuide();
   });
+  $('parseBtn').addEventListener('click',applyParsed);
+  $('clearMailBtn').addEventListener('click',()=>{
+    $('mailText').value='';
+    $('status').textContent='Mailtext geleert.';
+    $('status').className='status';
+    Object.keys(guideState).forEach(k=>guideState[k]=false);
+    updateGuide();
+  });
+  $('saveDefaults').addEventListener('click',saveDefaults);
+  $('recalcFeesBtn').addEventListener('click',()=>applyAutomaticFees(lastParsedAssignment));
+  $('openHfvFeesBtn').addEventListener('click',()=>openEmbeddedFeePdf('HFV'));
+  $('openBfvFeesBtn').addEventListener('click',()=>openEmbeddedFeePdf('BFV'));
+  $('associationSelect').addEventListener('change',()=>{updateTeamMileageRuleUI();if(lastParsedAssignment){updateAssociationAutoInfo(lastParsedAssignment);updateSpecialFeeQuestion(lastParsedAssignment,false);applyAutomaticFees(lastParsedAssignment); if(mileageStateHasValues())applyMileageCaps(); else updateKmLimitHint(lastParsedAssignment); if($('associationSelect').value==='auto')resolveAssociationByDestination(lastParsedAssignment)}});
+  $('higherTeamLeague').addEventListener('change',()=>{if(lastParsedAssignment){applyAutomaticFees(lastParsedAssignment); if(mileageStateHasValues())applyMileageCaps(); else updateKmLimitHint(lastParsedAssignment)}});
+  $('useDefaultsStartBtn').addEventListener('click',useDefaultsForStart);
+
+  function checkRouteAddresses(){
+    const start=norm($('routeStart').value);
+    const dest=norm($('routeDestination').value);
+
+    if(!start || !dest){
+      guideState.addressesChecked=false;
+      guideState.routeRequested=false;
+      guideState.routeCalculated=false;
+      guideState.routeChosen=false;
+      $('routeStatus').textContent='Bitte Startpunkt und Zieladresse vollständig eintragen.';
+      $('routeStatus').className='status warn';
+      updateGuide();
+      return false;
+    }
+
+    guideState.addressesChecked=true;
+    guideState.routeRequested=false;
+    guideState.routeCalculated=false;
+    guideState.routeChosen=false;
+    $('routeStatus').textContent='Startpunkt und Zieladresse geprüft. Als Nächstes „Routen berechnen“ klicken.';
+    $('routeStatus').className='status ok';
+    updateGuide();
+    return true;
+  }
+
+  $('checkRouteAddressesBtn').addEventListener('click',checkRouteAddresses);
+
+  $('calcRoutesBtn').addEventListener('click',()=>{
+    if(!guideState.addressesChecked){
+      $('routeStatus').textContent='Bitte zuerst „Startpunkt / Zieladresse prüfen“ klicken.';
+      $('routeStatus').className='status warn';
+      updateGuide();
+      return;
+    }
+
+    const startOk=!!norm($('routeStart').value);
+    const destOk=!!norm($('routeDestination').value);
+    if(startOk&&destOk){
+      guideState.routeRequested=true;
+      guideState.routeCalculated=false;
+      guideState.routeChosen=false;
+      updateGuide();
+    }
+    $('travelMode').value==='team'?calculateTeamRoutes():calculateRoutes();
+  });
+  $('googleMapsBtn').addEventListener('click',()=>{
+    guideState.mapsOpened=true;
+    updateGuide();
+    openGoogleMaps();
+  });
+  $('googleMapsSra1Btn').addEventListener('click',()=>openTeamGoogleMaps('sra1'));
+  $('googleMapsSra2Btn').addEventListener('click',()=>openTeamGoogleMaps('sra2'));
+  $('saveStartBtn').addEventListener('click',saveRouteStart);
+  ['routeStart','routeDestination'].forEach(id=>{
+    const el=$(id);
+    if(el) el.addEventListener('input',()=>{
+      if(guideState.addressesChecked){
+        guideState.addressesChecked=false;
+        guideState.routeRequested=false;
+        guideState.routeCalculated=false;
+        guideState.routeChosen=false;
+        updateGuide();
+      }
+    });
+  });
+
+  $('tripMode').addEventListener('change',()=>{if($('travelMode').value==='team'){if(teamRouteState.srRoutes.length){renderTeamRoutes();applyTeamRoutesIfReady()}}else{if(currentRoutes.length)renderRoutes(currentRoutes); if(selectedRouteIndex>=0)applyRoute(selectedRouteIndex)}});
+  $('travelMode').addEventListener('change',()=>{setTravelMode(); if(lastParsedAssignment)applyAutomaticFees(lastParsedAssignment); if(mileageStateHasValues())applyMileageCaps()});
+  ['teamSra1Home','teamSra1Meet','teamSra2Home','teamSra2Meet'].forEach(id=>{
+    $(id).addEventListener('change',()=>{if(lastParsedAssignment)applyAutomaticFees(lastParsedAssignment); if(id==='teamSra1Home')saveCurrentSraHome(1); if(id==='teamSra2Home')saveCurrentSraHome(2)});
+  });
+  $('teamSra1Home').addEventListener('blur',()=>saveCurrentSraHome(1));
+  $('teamSra2Home').addEventListener('blur',()=>saveCurrentSraHome(2));
+  $('sraDirectorySearch').addEventListener('input',renderSraDirectory);
+  $('sraAddBtn').addEventListener('click',()=>{
+    const name=norm($('sraAddName').value);
+    if(!name){$('sraDirectoryStatus').textContent='Bitte einen Namen eingeben.';$('sraDirectoryStatus').className='status warn';return}
+    upsertSraRecord({name,address:$('sraAddAddress').value,phone:$('sraAddPhone').value,email:$('sraAddEmail').value},true);
+    ['sraAddName','sraAddAddress','sraAddPhone','sraAddEmail'].forEach(id=>$(id).value='');
+  });
+  $('clearSraDirectoryBtn').addEventListener('click',()=>{
+    const records=loadSraDirectory();
+    if(!records.length)return;
+    if(confirm('Das gesamte SRA-Verzeichnis mit '+records.length+' Einträgen wirklich löschen?')){localStorage.removeItem(SRA_DIRECTORY_KEY);renderSraDirectory();$('sraDirectoryStatus').textContent='SRA-Verzeichnis wurde geleert.';$('sraDirectoryStatus').className='status'}
+  });
+  $('sameMeetingPoint').addEventListener('change',()=>{syncMeetingPoint(); if($('sameMeetingPoint').checked)$('teamSra2Meet').value=$('teamSra1Meet').value; updateMeetingShortcutState(1);updateMeetingShortcutState(2)});
+  $('teamSra1Meet').addEventListener('input',()=>{if($('sameMeetingPoint').checked)$('teamSra2Meet').value=$('teamSra1Meet').value; updateMeetingShortcutState(1);updateMeetingShortcutState(2);updateReceiptVisibility()});
+  $('teamSra2Meet').addEventListener('input',()=>{updateMeetingShortcutState(2);updateReceiptVisibility()});
+  $('teamSra1MeetHome').addEventListener('change',()=>applyMeetingShortcut(1,'home'));
+  $('teamSra1MeetGame').addEventListener('change',()=>applyMeetingShortcut(1,'game'));
+  $('teamSra2MeetHome').addEventListener('change',()=>applyMeetingShortcut(2,'home'));
+  $('teamSra2MeetGame').addEventListener('change',()=>applyMeetingShortcut(2,'game'));
+  $('routeDestination').addEventListener('input',()=>{if($('teamSra1MeetGame').checked)$('teamSra1Meet').value=$('routeDestination').value;if($('teamSra2MeetGame').checked&&!$('sameMeetingPoint').checked)$('teamSra2Meet').value=$('routeDestination').value;updateMeetingShortcutState(1);updateMeetingShortcutState(2)});
+  $('teamSra1Home').addEventListener('input',()=>{if($('teamSra1MeetHome').checked)$('teamSra1Meet').value=$('teamSra1Home').value;updateMeetingShortcutState(1);updateReceiptVisibility()});
+  $('teamSra2Home').addEventListener('input',()=>{if($('teamSra2MeetHome').checked&&!$('sameMeetingPoint').checked)$('teamSra2Meet').value=$('teamSra2Home').value;updateMeetingShortcutState(2);updateReceiptVisibility()});
+  ['srKm','teamKm','team2Km','sra1Km','sra2Km'].forEach(id=>{
+    $(id).addEventListener('change',()=>{normalizeKmInput(id);captureManualMileage(id)});
+    $(id).addEventListener('blur',()=>{normalizeKmInput(id);captureManualMileage(id)});
+  });
+  if($('feesCheckedBtn')){
+    $('feesCheckedBtn').addEventListener('click',()=>{
+      if(!guideState.routeChosen){
+        $('feeStatus').textContent='Bitte zuerst die Route berechnen und auswählen.';
+        $('feeStatus').className='status warn';
+        updateGuide();
+        return;
+      }
+      guideState.feesChecked=true;
+      $('feeStatus').textContent='Spesen geprüft.';
+      $('feeStatus').className='status ok';
+      updateGuide();
+    });
+  }
+
+  if($('receiptCheckedBtn')){
+    $('receiptCheckedBtn').addEventListener('click',()=>{
+      if(!guideState.feesChecked){
+        $('feeStatus').textContent='Bitte zuerst die Spesen prüfen.';
+        $('feeStatus').className='status warn';
+        updateGuide();
+        return;
+      }
+      guideState.receiptChecked=true;
+      updateGuide();
+    });
+  }
+
+  if($('printFormat')){
+    const markPrintFormat=()=>{
+      if(guideState.receiptChecked){
+        guideState.printFormatTouched=true;
+        updateGuide();
+      }
+    };
+    $('printFormat').addEventListener('change',markPrintFormat);
+    $('printFormat').addEventListener('click',markPrintFormat);
+  }
+
+
+  if($('saveReceiptBrowserBtn')) $('saveReceiptBrowserBtn').addEventListener('click',()=>saveCurrentReceiptToBrowser(true));
+  if($('saveReceiptFileBtn')) $('saveReceiptFileBtn').addEventListener('click',saveCurrentReceiptAsFile);
+  if($('loadReceiptFileBtn')) $('loadReceiptFileBtn').addEventListener('click',()=>$('receiptFileInput').click());
+  if($('receiptFileInput')) $('receiptFileInput').addEventListener('change',()=>importReceiptFile($('receiptFileInput').files&&$('receiptFileInput').files[0]));
+  if($('exportReceiptArchiveBtn')) $('exportReceiptArchiveBtn').addEventListener('click',exportReceiptArchive);
+
+  document.querySelectorAll('.calc,.travel').forEach(el=>el.addEventListener('input',calc));
+  ['srRate','teamRate','team2Rate','sra1Rate','sra2Rate'].forEach(id=>$(id).addEventListener('change',()=>{if(mileageStateHasValues())applyMileageCaps();else calc()}));
+  ['srKm','teamKm','team2Km','sra1Km','sra2Km'].forEach(id=>{
+    const el=$(id);
+    if(el) el.addEventListener('input',updateTravelRateVisibility);
+  });
+  updateTravelRateVisibility();
+  ids.forEach(id=>{const el=$(id); if(el && !el.readOnly)el.addEventListener('change',()=>{if(id!=='total')calc()})});
+  loadDefaults();syncMeetingPoint();setTravelMode();updateTeamMileageRuleUI();renderSraDirectory();updateMeetingShortcutState(1);updateMeetingShortcutState(2);calc();renderReceiptArchive();
+  updateGuide();
+  fitReceiptPreview();
+  window.addEventListener('resize',fitReceiptPreview);
+  window.addEventListener('orientationchange',()=>setTimeout(fitReceiptPreview,100));
+})();
+</script>
+
+<script>
+  // Web-App-Unterstützung (GitHub Pages / PWA)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js?v=70', {scope:'./'}).catch(() => {});
+    });
+  }
+</script>
+
+<script src="./sra-excel.js?v=70"></script>
+</body>
+</html>
