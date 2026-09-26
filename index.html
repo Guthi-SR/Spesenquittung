@@ -8,9 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
-<link rel="manifest" href="./manifest.webmanifest?v=75">
-<link rel="icon" href="./logo-spesen.png?v=75" type="image/png">
-<link rel="apple-touch-icon" href="./logo-spesen.png?v=75">
+<link rel="manifest" href="./manifest.webmanifest?v=76">
+<link rel="icon" href="./logo-spesen.png?v=76" type="image/png">
+<link rel="apple-touch-icon" href="./logo-spesen.png?v=76">
 <title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
@@ -366,6 +366,14 @@
   .archive-panel .archive-actions button{flex:0 1 auto}
   .archive-panel .archive-note{margin-top:8px}
   .receipt-archive{display:grid;gap:10px;margin-top:12px}
+  .archive-role{
+    border:1px solid #cbd5df;border-radius:11px;background:#fff;overflow:hidden
+  }
+  .archive-role>summary{
+    cursor:pointer;padding:11px 12px;font-weight:800;background:#e6edf4;
+    display:flex;justify-content:space-between;gap:12px;align-items:center
+  }
+  .archive-role-body{display:grid;gap:8px;padding:8px}
   .archive-month{
     border:1px solid #d7dde3;border-radius:10px;background:#f8fafb;overflow:hidden
   }
@@ -3368,6 +3376,16 @@
         competition:archiveText(lastParsedAssignment&&lastParsedAssignment.competition),
         function:archiveText(lastParsedAssignment&&lastParsedAssignment.assignmentFunction) || (lastParsedAssignment&&currentAssociationFor(lastParsedAssignment)==='SONSTIGE'&&selectedOtherFunctionKey(lastParsedAssignment)?(selectedOtherFunctionKey(lastParsedAssignment)==='4 offizieller'?'4. Offizieller':selectedOtherFunctionKey(lastParsedAssignment)==='pate'?'Pate':'BEO'):''),
         functionScope:(lastParsedAssignment&&currentAssociationFor(lastParsedAssignment)==='SONSTIGE')?(selectedOtherScope(lastParsedAssignment)==='GRUPPE'?'Gruppenintern':selectedOtherScope(lastParsedAssignment)==='BEZIRK'?'Bezirk':''):'',
+        archiveRole:(()=>{
+          const p=lastParsedAssignment||{};
+          const own=norm($('defName')&&$('defName').value)||refName;
+          if(currentAssociationFor(p)==='SONSTIGE'){
+            const fk=selectedOtherFunctionKey(p);
+            return fk==='4 offizieller'?'4. Offizieller':fk==='pate'?'Pate':fk==='beo'?'BEO':'Sonstige';
+          }
+          if(own&&((p.sra1&&personNameMatches(p.sra1,own))||(p.sra2&&personNameMatches(p.sra2,own)))) return 'Schiedsrichter-Assistent';
+          return 'Schiedsrichter';
+        })(),
         total:archiveText($('total').value),
         referee:refName
       },
@@ -3514,97 +3532,225 @@
     return Number.isFinite(n)?n:0;
   }
 
+
+  function archiveControlValue(record,id){
+    const c=record&&record.controls&&record.controls[id];
+    if(!c) return '';
+    return c.value==null?'':archiveText(c.value);
+  }
+
+  function archiveRoleInfo(record){
+    const s=record&&record.summary||{};
+    const p=record&&record.state&&record.state.lastParsedAssignment||{};
+    const storedRole=archiveText(s.archiveRole);
+    const fnRaw=archiveText(s.function)||storedRole||archiveText(p.assignmentFunction)||archiveControlValue(record,'otherFunctionSelect');
+    const scopeRaw=archiveText(s.functionScope)||archiveControlValue(record,'otherScopeSelect');
+    const fn=otherRuleKey(fnRaw);
+    const scope=otherRuleKey(scopeRaw);
+
+    const scopeCode=/bezirk/.test(scope)?'BEZIRK':/(gruppe|gruppenintern)/.test(scope)?'GRUPPE':'';
+    const scopeLabel=scopeCode==='BEZIRK'?'Bezirk':scopeCode==='GRUPPE'?'Gruppenintern':'';
+
+    if(/pate/.test(fn)){
+      return {
+        key:'30-pate-'+(scopeCode||'unklar'),
+        label:'Pate'+(scopeLabel?' · '+scopeLabel:' · Bereich unklar'),
+        role:'Pate',
+        scope:scopeLabel,
+        order:scopeCode==='GRUPPE'?30:scopeCode==='BEZIRK'?31:39
+      };
+    }
+    if(/4 offizieller|4 off|vierter offizieller/.test(fn)){
+      return {
+        key:'40-vierter-'+(scopeCode||'unklar'),
+        label:'4. Offizieller'+(scopeLabel?' · '+scopeLabel:' · Bereich unklar'),
+        role:'4. Offizieller',
+        scope:scopeLabel,
+        order:scopeCode==='GRUPPE'?40:scopeCode==='BEZIRK'?41:49
+      };
+    }
+    if(/beo|beobachter|beobachtung/.test(fn)){
+      return {
+        key:'50-beo-'+(scopeCode||'unklar'),
+        label:'BEO'+(scopeLabel?' · '+scopeLabel:' · Bereich unklar'),
+        role:'BEO',
+        scope:scopeLabel,
+        order:scopeCode==='GRUPPE'?50:scopeCode==='BEZIRK'?51:59
+      };
+    }
+
+    if(/schiedsrichter.?assistent|\bsra\b|assistent/.test(fn)){
+      return {key:'20-sra',label:'Schiedsrichter-Assistent',role:'Schiedsrichter-Assistent',scope:'',order:20};
+    }
+
+    const ownName=norm($('defName')&&$('defName').value);
+    if(ownName && p){
+      if((p.sra1&&personNameMatches(p.sra1,ownName)) || (p.sra2&&personNameMatches(p.sra2,ownName))){
+        return {key:'20-sra',label:'Schiedsrichter-Assistent',role:'Schiedsrichter-Assistent',scope:'',order:20};
+      }
+      if(p.assignmentPerson && personNameMatches(p.assignmentPerson,ownName)){
+        const roleKey=detectedOtherFunctionKey(p);
+        const roleScope=detectOtherScope(p);
+        const temp={
+          summary:{
+            function:roleKey==='4 offizieller'?'4. Offizieller':roleKey==='pate'?'Pate':roleKey==='beo'?'BEO':'',
+            functionScope:roleScope==='GRUPPE'?'Gruppenintern':roleScope==='BEZIRK'?'Bezirk':''
+          },
+          controls:record.controls,
+          state:{lastParsedAssignment:{}}
+        };
+        const nested=archiveRoleInfo(temp);
+        if(nested&&nested.key!=='10-sr') return nested;
+      }
+    }
+
+    return {key:'10-sr',label:'Schiedsrichter',role:'Schiedsrichter',scope:'',order:10};
+  }
+
+  function archiveRoleSort(a,b){
+    const ia=archiveRoleInfo(a), ib=archiveRoleInfo(b);
+    if(ia.order!==ib.order) return ia.order-ib.order;
+    const da=archiveText(a.summary&&a.summary.date);
+    const db=archiveText(b.summary&&b.summary.date);
+    if(da!==db) return db.localeCompare(da);
+    return archiveText(b.updatedAt).localeCompare(archiveText(a.updatedAt));
+  }
+
   function renderReceiptArchive(){
     const box=$('receiptArchive');
     if(!box) return;
     box.innerHTML='';
+
     const records=loadReceiptArchive()
       .filter(Boolean)
-      .sort((a,b)=>{
-        const da=archiveText(a.summary&&a.summary.date);
-        const db=archiveText(b.summary&&b.summary.date);
-        if(da!==db) return db.localeCompare(da);
-        return archiveText(b.updatedAt).localeCompare(archiveText(a.updatedAt));
-      });
+      .sort(archiveRoleSort);
 
     if(!records.length){
       const empty=document.createElement('div');
       empty.className='archive-empty';
-      empty.textContent='Noch keine gespeicherten Spesenquittungen. Nach dem Speichern werden sie hier automatisch nach Monat und Datum sortiert.';
+      empty.textContent='Noch keine gespeicherten Spesenquittungen. Nach dem Speichern werden sie nach Funktion, Monat und Datum sortiert.';
       box.appendChild(empty);
       return;
     }
 
-    const groups=new Map();
+    const roleGroups=new Map();
     records.forEach(r=>{
-      const key=monthKeyForRecord(r);
-      if(!groups.has(key)) groups.set(key,[]);
-      groups.get(key).push(r);
+      const info=archiveRoleInfo(r);
+      if(!roleGroups.has(info.key)) roleGroups.set(info.key,{info,items:[]});
+      roleGroups.get(info.key).items.push(r);
     });
 
-    [...groups.entries()].sort((a,b)=>b[0].localeCompare(a[0])).forEach(([month,items])=>{
-      const details=document.createElement('details');
-      details.className='archive-month';
-      details.open=true;
+    [...roleGroups.values()]
+      .sort((a,b)=>a.info.order-b.info.order || a.info.label.localeCompare(b.info.label,'de'))
+      .forEach(roleGroup=>{
+        const roleDetails=document.createElement('details');
+        roleDetails.className='archive-role';
+        roleDetails.open=true;
 
-      const summary=document.createElement('summary');
-      const title=document.createElement('span');
-      title.textContent=formatArchiveMonth(month);
-      const stats=document.createElement('span');
-      const monthTotal=items.reduce((sum,r)=>sum+parseMoneyValue(r.summary&&r.summary.total),0);
-      stats.textContent=items.length+' Quittung'+(items.length===1?'':'en')+(monthTotal?' · '+monthTotal.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €':'');
-      summary.append(title,stats);
-      details.appendChild(summary);
+        const roleSummary=document.createElement('summary');
+        const roleTitle=document.createElement('span');
+        roleTitle.textContent=roleGroup.info.label;
+        const roleStats=document.createElement('span');
+        const roleTotal=roleGroup.items.reduce((sum,r)=>sum+parseMoneyValue(r.summary&&r.summary.total),0);
+        roleStats.textContent=roleGroup.items.length+' Eintrag'+(roleGroup.items.length===1?'':'e')
+          +(roleTotal?' · '+roleTotal.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €':'');
+        roleSummary.append(roleTitle,roleStats);
+        roleDetails.appendChild(roleSummary);
 
-      const list=document.createElement('div');
-      list.className='archive-month-list';
+        const roleBody=document.createElement('div');
+        roleBody.className='archive-role-body';
 
-      items.forEach(r=>{
-        const s=r.summary||{};
-        const card=document.createElement('div');
-        card.className='archive-card'+(r.id===activeReceiptId?' archive-active':'');
+        const monthGroups=new Map();
+        roleGroup.items.forEach(r=>{
+          const key=monthKeyForRecord(r);
+          if(!monthGroups.has(key)) monthGroups.set(key,[]);
+          monthGroups.get(key).push(r);
+        });
 
-        const info=document.createElement('div');
-        const t=document.createElement('div');
-        t.className='archive-card-title';
-        t.textContent=formatArchiveDate(s.date)+' · '+(archiveText(s.home)||'Heim')+' – '+(archiveText(s.away)||'Gast');
-        const meta=document.createElement('div');
-        meta.className='archive-card-meta';
-        meta.textContent=[s.competition||s.league,s.place,s.referee].filter(Boolean).join(' · ') || 'Keine weiteren Angaben';
-        info.append(t,meta);
+        [...monthGroups.entries()]
+          .sort((a,b)=>b[0].localeCompare(a[0]))
+          .forEach(([month,items])=>{
+            items.sort((a,b)=>{
+              const da=archiveText(a.summary&&a.summary.date);
+              const db=archiveText(b.summary&&b.summary.date);
+              if(da!==db) return db.localeCompare(da);
+              return archiveText(b.updatedAt).localeCompare(archiveText(a.updatedAt));
+            });
 
-        const total=document.createElement('div');
-        total.className='archive-card-total';
-        total.textContent=archiveText(s.total)?archiveText(s.total)+' €':'';
+            const details=document.createElement('details');
+            details.className='archive-month';
+            details.open=true;
 
-        const actions=document.createElement('div');
-        actions.className='archive-card-actions';
+            const summary=document.createElement('summary');
+            const title=document.createElement('span');
+            title.textContent=formatArchiveMonth(month);
+            const stats=document.createElement('span');
+            const monthTotal=items.reduce((sum,r)=>sum+parseMoneyValue(r.summary&&r.summary.total),0);
+            stats.textContent=items.length+' Quittung'+(items.length===1?'':'en')
+              +(monthTotal?' · '+monthTotal.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €':'');
+            summary.append(title,stats);
+            details.appendChild(summary);
 
-        const openBtn=document.createElement('button');
-        openBtn.type='button';
-        openBtn.textContent='Öffnen / bearbeiten';
-        openBtn.dataset.archiveOpen=r.id;
+            const list=document.createElement('div');
+            list.className='archive-month-list';
 
-        const fileBtn=document.createElement('button');
-        fileBtn.type='button';
-        fileBtn.className='secondary';
-        fileBtn.textContent='Datei speichern';
-        fileBtn.dataset.archiveFile=r.id;
+            items.forEach(r=>{
+              const s=r.summary||{};
+              const role=archiveRoleInfo(r);
+              const card=document.createElement('div');
+              card.className='archive-card'+(r.id===activeReceiptId?' archive-active':'');
 
-        const delBtn=document.createElement('button');
-        delBtn.type='button';
-        delBtn.className='light';
-        delBtn.textContent='Löschen';
-        delBtn.dataset.archiveDelete=r.id;
+              const info=document.createElement('div');
+              const t=document.createElement('div');
+              t.className='archive-card-title';
+              t.textContent=formatArchiveDate(s.date)+' · '+(archiveText(s.home)||'Heim')+' – '+(archiveText(s.away)||'Gast');
 
-        actions.append(openBtn,fileBtn,delBtn);
-        card.append(info,total,actions);
-        list.appendChild(card);
+              const meta=document.createElement('div');
+              meta.className='archive-card-meta';
+              meta.textContent=[
+                role.label,
+                s.competition||s.league,
+                s.place,
+                s.referee
+              ].filter(Boolean).join(' · ') || 'Keine weiteren Angaben';
+              info.append(t,meta);
+
+              const total=document.createElement('div');
+              total.className='archive-card-total';
+              total.textContent=archiveText(s.total)?archiveText(s.total)+' €':'';
+
+              const actions=document.createElement('div');
+              actions.className='archive-card-actions';
+
+              const openBtn=document.createElement('button');
+              openBtn.type='button';
+              openBtn.textContent='Öffnen / bearbeiten';
+              openBtn.dataset.archiveOpen=r.id;
+
+              const fileBtn=document.createElement('button');
+              fileBtn.type='button';
+              fileBtn.className='secondary';
+              fileBtn.textContent='Datei speichern';
+              fileBtn.dataset.archiveFile=r.id;
+
+              const delBtn=document.createElement('button');
+              delBtn.type='button';
+              delBtn.className='light';
+              delBtn.textContent='Löschen';
+              delBtn.dataset.archiveDelete=r.id;
+
+              actions.append(openBtn,fileBtn,delBtn);
+              card.append(info,total,actions);
+              list.appendChild(card);
+            });
+
+            details.appendChild(list);
+            roleBody.appendChild(details);
+          });
+
+        roleDetails.appendChild(roleBody);
+        box.appendChild(roleDetails);
       });
-
-      details.appendChild(list);
-      box.appendChild(details);
-    });
 
     box.querySelectorAll('[data-archive-open]').forEach(btn=>btn.addEventListener('click',()=>openArchivedReceipt(btn.dataset.archiveOpen)));
     box.querySelectorAll('[data-archive-file]').forEach(btn=>btn.addEventListener('click',async()=>{
@@ -4133,7 +4279,7 @@
   // Web-App-Unterstützung (GitHub Pages / PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=75', {scope:'./'}).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=76', {scope:'./'}).catch(() => {});
     });
   }
 </script>
