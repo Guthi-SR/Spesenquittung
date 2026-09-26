@@ -2690,7 +2690,7 @@
       parts.push('höhere Mannschaft: '+ctx.selectedLabel);
       if(ctx.minimumApplied) parts.push('Hessenpokal-Mindestsatz Gruppenliga angewendet');
     }
-    parts.push(result.label,'SR '+Number(srValue).toFixed(2).replace('.',',')+' €');
+    parts.push(result.label,(association==='SONSTIGE'?'Spesen ':'SR ')+Number(srValue).toFixed(2).replace('.',',')+' €');
     if(result.surcharge) parts.push('inkl. 50 % Werktagszuschlag');
     if(hasSra1||hasSra2){
       if(result.sra!=null){
