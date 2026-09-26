@@ -8,9 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
-<link rel="manifest" href="./manifest.webmanifest?v=76">
-<link rel="icon" href="./logo-spesen.png?v=76" type="image/png">
-<link rel="apple-touch-icon" href="./logo-spesen.png?v=76">
+<link rel="manifest" href="./manifest.webmanifest?v=80">
+<link rel="icon" href="./logo-spesen.png?v=80" type="image/png">
+<link rel="apple-touch-icon" href="./logo-spesen.png?v=80">
 <title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
@@ -384,8 +384,12 @@
   .archive-month-list{display:grid;gap:8px;padding:9px}
   .archive-card{
     background:#fff;border:1px solid #d9dee3;border-radius:9px;padding:9px 10px;
-    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px 12px;align-items:center
   }
+  .archive-card-select{display:flex;align-items:center;justify-content:center}
+  .archive-card-select input,.archive-month-select input{width:18px;height:18px;cursor:pointer}
+  .archive-month-select{display:inline-flex;align-items:center;gap:7px;min-width:0}
+  .archive-month-select span{overflow-wrap:anywhere}
   .archive-card-title{font-weight:800;font-size:13px;overflow-wrap:anywhere}
   .archive-card-meta{font-size:11px;color:#5f6872;margin-top:3px;line-height:1.35}
   .archive-card-total{font-weight:800;white-space:nowrap}
@@ -449,8 +453,8 @@
     .archive-panel .archive-actions{display:grid;grid-template-columns:1fr}
     .other-fees-grid{grid-template-columns:1fr}
     .archive-panel .archive-actions button{width:100%}
-    .archive-card{grid-template-columns:1fr}
-    .archive-card-total{grid-column:1}
+    .archive-card{grid-template-columns:auto minmax(0,1fr)}
+    .archive-card-total{grid-column:2}
     .archive-card-actions{display:grid;grid-template-columns:1fr}
     .archive-card-actions button{width:100%}
     .sheet-wrap{
@@ -913,14 +917,15 @@
       <h2>5. Spesenquittungen speichern &amp; laden</h2>
       <div class="hint archive-note">
         Die Quittungen werden <strong>nur lokal in diesem Browser</strong> gespeichert.
-        Zusätzlich kannst du jede Quittung als JSON-Datei sichern und später wieder laden und bearbeiten.
+        Für die Übertragung auf ein anderes Gerät kannst du einzelne Quittungen oder ganze Monate per Auswahlkästchen markieren und gemeinsam als JSON-Datei exportieren.
+        Jede Quittung behält dabei dauerhaft ihre eigene ID; Änderungen erhöhen nur den Versionsstand.
         Der <strong>Steuer-Excel-Export</strong> listet alle gespeicherten Einsätze nach Datum auf und berücksichtigt nur deine eigenen Spesen und deine eigenen gefahrenen Kilometer.
       </div>
       <div class="archive-actions">
         <button id="saveReceiptBrowserBtn" type="button">Im Browser speichern</button>
         <button id="saveReceiptFileBtn" type="button" class="secondary">Als Datei speichern</button>
-        <button id="loadReceiptFileBtn" type="button" class="light">Datei laden</button>
-        <button id="exportReceiptArchiveBtn" type="button" class="light">Gesamtes Archiv sichern</button>
+        <button id="loadReceiptFileBtn" type="button" class="light">Quittungen importieren</button>
+        <button id="exportReceiptArchiveBtn" type="button" class="light" disabled>Ausgewählte exportieren (0)</button>
         <button id="exportTaxExcelBtn" type="button" class="secondary">Steuer-Excel exportieren</button>
         <input id="receiptFileInput" class="archive-file-input" type="file" accept=".json,application/json">
       </div>
@@ -3295,8 +3300,40 @@
   // ---------- Spesenquittungen speichern / laden ----------
   const RECEIPT_ARCHIVE_KEY='srgMspSpesenReceiptArchiveV1';
   const RECEIPT_FILE_FORMAT='srg-msp-spesenquittung';
-  const RECEIPT_FILE_VERSION=1;
+  const RECEIPT_FILE_VERSION=2;
   let activeReceiptId=null;
+  let selectedReceiptIds=new Set();
+
+  function receiptRevision(record){
+    const n=Number(record&&record.revision);
+    return Number.isFinite(n)&&n>0?Math.floor(n):1;
+  }
+
+  function updateReceiptExportButton(){
+    const btn=$('exportReceiptArchiveBtn');
+    if(!btn) return;
+    const count=selectedReceiptIds.size;
+    btn.textContent='Ausgewählte exportieren ('+count+')';
+    btn.disabled=count===0;
+  }
+
+  function syncArchiveSelectionControls(){
+    const box=$('receiptArchive');
+    if(!box){ updateReceiptExportButton(); return; }
+
+    box.querySelectorAll('[data-archive-select]').forEach(cb=>{
+      cb.checked=selectedReceiptIds.has(cb.dataset.archiveSelect);
+    });
+
+    box.querySelectorAll('[data-archive-month-select]').forEach(cb=>{
+      const ids=Array.isArray(cb._receiptIds)?cb._receiptIds:[];
+      const selected=ids.filter(id=>selectedReceiptIds.has(id)).length;
+      cb.checked=ids.length>0&&selected===ids.length;
+      cb.indeterminate=selected>0&&selected<ids.length;
+    });
+
+    updateReceiptExportButton();
+  }
 
   const RECEIPT_EXCLUDE_IDS=new Set([
     'defName','defGroup','defStreet','defTown',
@@ -3371,6 +3408,7 @@
       format:RECEIPT_FILE_FORMAT,
       version:RECEIPT_FILE_VERSION,
       id,
+      revision:existing?receiptRevision(existing)+1:1,
       createdAt:(existing&&existing.createdAt)||new Date().toISOString(),
       updatedAt:new Date().toISOString(),
       summary:{
@@ -3434,6 +3472,7 @@
         archiveText(r.summary.away)===record.summary.away);
       if(same>=0){
         record.id=records[same].id;
+        record.revision=receiptRevision(records[same])+1;
         record.createdAt=records[same].createdAt||record.createdAt;
         records[same]=record;
       }else records.push(record);
@@ -3631,11 +3670,15 @@
       .filter(Boolean)
       .sort(archiveRoleSort);
 
+    const validIds=new Set(records.map(r=>r&&r.id).filter(Boolean));
+    selectedReceiptIds=new Set([...selectedReceiptIds].filter(id=>validIds.has(id)));
+
     if(!records.length){
       const empty=document.createElement('div');
       empty.className='archive-empty';
       empty.textContent='Noch keine gespeicherten Spesenquittungen. Nach dem Speichern werden sie nach Funktion, Einsatzbereich, Monat und Datum sortiert.';
       box.appendChild(empty);
+      updateReceiptExportButton();
       return;
     }
 
@@ -3688,13 +3731,34 @@
             details.open=false;
 
             const summary=document.createElement('summary');
+
+            const monthSelectWrap=document.createElement('label');
+            monthSelectWrap.className='archive-month-select';
+            monthSelectWrap.title='Alle Quittungen dieses Monats auswählen';
+
+            const monthSelect=document.createElement('input');
+            monthSelect.type='checkbox';
+            monthSelect.dataset.archiveMonthSelect=month+'-'+roleGroup.info.key;
+            monthSelect._receiptIds=items.map(r=>r.id).filter(Boolean);
+            monthSelect.addEventListener('click',ev=>ev.stopPropagation());
+            monthSelect.addEventListener('change',ev=>{
+              ev.stopPropagation();
+              monthSelect._receiptIds.forEach(id=>{
+                if(monthSelect.checked) selectedReceiptIds.add(id);
+                else selectedReceiptIds.delete(id);
+              });
+              syncArchiveSelectionControls();
+            });
+
             const title=document.createElement('span');
             title.textContent=formatArchiveMonth(month);
+            monthSelectWrap.append(monthSelect,title);
+
             const stats=document.createElement('span');
             const monthTotal=items.reduce((sum,r)=>sum+parseMoneyValue(r.summary&&r.summary.total),0);
             stats.textContent=items.length+' Quittung'+(items.length===1?'':'en')
               +(monthTotal?' · '+monthTotal.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €':'');
-            summary.append(title,stats);
+            summary.append(monthSelectWrap,stats);
             details.appendChild(summary);
 
             const list=document.createElement('div');
@@ -3705,6 +3769,20 @@
               const role=archiveRoleInfo(r);
               const card=document.createElement('div');
               card.className='archive-card'+(r.id===activeReceiptId?' archive-active':'');
+
+              const selectWrap=document.createElement('label');
+              selectWrap.className='archive-card-select';
+              selectWrap.title='Diese Quittung für den Export auswählen';
+              const select=document.createElement('input');
+              select.type='checkbox';
+              select.dataset.archiveSelect=r.id;
+              select.checked=selectedReceiptIds.has(r.id);
+              select.addEventListener('change',()=>{
+                if(select.checked) selectedReceiptIds.add(r.id);
+                else selectedReceiptIds.delete(r.id);
+                syncArchiveSelectionControls();
+              });
+              selectWrap.appendChild(select);
 
               const info=document.createElement('div');
               const t=document.createElement('div');
@@ -3717,7 +3795,8 @@
                 role.label,
                 s.competition||s.league,
                 s.place,
-                s.referee
+                s.referee,
+                'Version '+receiptRevision(r)
               ].filter(Boolean).join(' · ') || 'Keine weiteren Angaben';
               info.append(t,meta);
 
@@ -3746,7 +3825,7 @@
               delBtn.dataset.archiveDelete=r.id;
 
               actions.append(openBtn,fileBtn,delBtn);
-              card.append(info,total,actions);
+              card.append(selectWrap,info,total,actions);
               list.appendChild(card);
             });
 
@@ -3767,15 +3846,18 @@
       const records=loadReceiptArchive();
       const r=records.find(x=>x&&x.id===btn.dataset.archiveDelete);
       if(!r) return;
-      const s=r.summary||{};
-      if(!confirm('Spesenquittung vom '+formatArchiveDate(s.date)+' ('+(s.home||'Heim')+' – '+(s.away||'Gast')+') wirklich aus dem Browser löschen?')) return;
+      const sum=r.summary||{};
+      if(!confirm('Spesenquittung vom '+formatArchiveDate(sum.date)+' ('+(sum.home||'Heim')+' – '+(sum.away||'Gast')+') wirklich aus dem Browser löschen?')) return;
       const next=records.filter(x=>x&&x.id!==r.id);
       storeReceiptArchive(next);
+      selectedReceiptIds.delete(r.id);
       if(activeReceiptId===r.id) activeReceiptId=null;
       renderReceiptArchive();
       $('receiptArchiveStatus').textContent='Spesenquittung wurde aus dem Browser-Archiv gelöscht.';
       $('receiptArchiveStatus').className='status';
     }));
+
+    syncArchiveSelectionControls();
   }
 
   function openArchivedReceipt(id){
@@ -3958,21 +4040,90 @@
   }
 
   async function exportReceiptArchive(){
-    const records=loadReceiptArchive();
+    const all=loadReceiptArchive();
+    const records=all.filter(r=>r&&selectedReceiptIds.has(r.id));
     if(!records.length){
-      $('receiptArchiveStatus').textContent='Im Browser sind noch keine Spesenquittungen gespeichert.';
+      $('receiptArchiveStatus').textContent='Bitte zuerst mindestens eine Quittung im Archiv auswählen.';
       $('receiptArchiveStatus').className='status warn';
       return;
     }
+
     const payload={
       format:'srg-msp-spesenarchiv',
-      version:1,
+      version:2,
       exportedAt:new Date().toISOString(),
       receipts:records
     };
-    await saveJsonFile(payload,'Spesenarchiv_SRG_MSP_'+new Date().toISOString().slice(0,10)+'.json');
-    $('receiptArchiveStatus').textContent='Das komplette Browser-Archiv wurde als Datei gesichert.';
+
+    await saveJsonFile(
+      payload,
+      'Spesenquittungen_Auswahl_SRG_MSP_'+new Date().toISOString().slice(0,10)+'.json'
+    );
+
+    $('receiptArchiveStatus').textContent=records.length+' ausgewählte Quittung'+(records.length===1?'':'en')+' wurde'+(records.length===1?'':'n')+' als Datei exportiert.';
     $('receiptArchiveStatus').className='status ok';
+  }
+
+  function importedReceiptLabel(r){
+    const sum=r&&r.summary||{};
+    return formatArchiveDate(sum.date)+' · '+(archiveText(sum.home)||'Heim')+' – '+(archiveText(sum.away)||'Gast');
+  }
+
+  function mergeImportedReceipts(incoming){
+    const current=loadReceiptArchive();
+    const byId=new Map(current.filter(Boolean).map(r=>[r.id,r]));
+    let added=0,updated=0,skipped=0,older=0;
+
+    (incoming||[]).filter(Boolean).forEach(record=>{
+      if(record.format!==RECEIPT_FILE_FORMAT) return;
+
+      if(!record.id){
+        const sum=record.summary||{};
+        record.id=makeReceiptId(sum.date,sum.home,sum.away,sum.referee);
+      }
+
+      if(!record.revision) record.revision=1;
+      if(!record.updatedAt) record.updatedAt=record.createdAt||new Date(0).toISOString();
+
+      const existing=byId.get(record.id);
+      if(!existing){
+        byId.set(record.id,record);
+        added++;
+        return;
+      }
+
+      const incomingRevision=receiptRevision(record);
+      const currentRevision=receiptRevision(existing);
+
+      if(incomingRevision===currentRevision){
+        skipped++;
+        return;
+      }
+
+      if(incomingRevision<currentRevision){
+        older++;
+        return;
+      }
+
+      const question=
+        'Für diese Quittung ist eine neuere Version vorhanden:\n\n'+
+        importedReceiptLabel(record)+'\n'+
+        'Vorhanden: Version '+currentRevision+'\n'+
+        'Import: Version '+incomingRevision+'\n\n'+
+        'Soll die vorhandene Quittung mit der neueren Version aktualisiert werden?';
+
+      if(confirm(question)){
+        record.createdAt=existing.createdAt||record.createdAt;
+        byId.set(record.id,record);
+        updated++;
+      }else{
+        skipped++;
+      }
+    });
+
+    const merged=[...byId.values()];
+    if(!storeReceiptArchive(merged)) return null;
+    return {merged,added,updated,skipped,older};
   }
 
   async function importReceiptFile(file){
@@ -3981,37 +4132,37 @@
       const text=await file.text();
       const data=JSON.parse(text);
 
+      let incoming=[];
+      let single=false;
+
       if(data&&data.format==='srg-msp-spesenarchiv'&&Array.isArray(data.receipts)){
-        const current=loadReceiptArchive();
-        const map=new Map(current.filter(Boolean).map(r=>[r.id,r]));
-        data.receipts.filter(Boolean).forEach(r=>{
-          if(r.format===RECEIPT_FILE_FORMAT && r.id) map.set(r.id,r);
-        });
-        const merged=[...map.values()];
-        if(!storeReceiptArchive(merged)) return;
-        renderReceiptArchive();
-        $('receiptArchiveStatus').textContent=data.receipts.length+' Quittung'+(data.receipts.length===1?'':'en')+' aus dem Archiv importiert.';
-        $('receiptArchiveStatus').className='status ok';
-        return;
+        incoming=data.receipts;
+      }else if(data&&data.format===RECEIPT_FILE_FORMAT){
+        incoming=[data];
+        single=true;
+      }else{
+        throw new Error('Unbekanntes Dateiformat');
       }
 
-      if(data&&data.format===RECEIPT_FILE_FORMAT){
-        if(!data.id){
-          const s=data.summary||{};
-          data.id=makeReceiptId(s.date,s.home,s.away,s.referee);
-        }
-        const records=loadReceiptArchive();
-        const idx=records.findIndex(r=>r&&r.id===data.id);
-        if(idx>=0) records[idx]=data; else records.push(data);
-        storeReceiptArchive(records);
-        renderReceiptArchive();
-        restoreReceiptRecord(data);
-        return;
-      }
+      const result=mergeImportedReceipts(incoming);
+      if(!result) return;
 
-      throw new Error('Unbekanntes Dateiformat');
+      renderReceiptArchive();
+
+      $('receiptArchiveStatus').textContent=
+        'Import abgeschlossen: '+result.added+' neu, '+result.updated+' aktualisiert, '+
+        result.skipped+' gleiche/abgelehnte Version'+(result.skipped===1?'':'en')+' übersprungen'+
+        (result.older?', '+result.older+' ältere Version'+(result.older===1?'':'en')+' nicht übernommen':'')+'.';
+      $('receiptArchiveStatus').className='status ok';
+
+      if(single){
+        const id=incoming[0]&&incoming[0].id;
+        const accepted=result.merged.find(r=>r&&r.id===id);
+        if(accepted) restoreReceiptRecord(accepted);
+      }
     }catch(err){
-      $('receiptArchiveStatus').textContent='Datei konnte nicht geladen werden. Bitte eine zuvor gespeicherte Spesenquittungs- oder Archivdatei auswählen.';
+      console.error(err);
+      $('receiptArchiveStatus').textContent='Datei konnte nicht geladen werden. Bitte eine zuvor exportierte Spesenquittungs- oder Archivdatei auswählen.';
       $('receiptArchiveStatus').className='status warn';
     }finally{
       if($('receiptFileInput')) $('receiptFileInput').value='';
@@ -4285,7 +4436,7 @@
   // Web-App-Unterstützung (GitHub Pages / PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=76', {scope:'./'}).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=80', {scope:'./'}).catch(() => {});
     });
   }
 </script>
