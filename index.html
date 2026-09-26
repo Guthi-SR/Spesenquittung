@@ -8,9 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
-<link rel="manifest" href="./manifest.webmanifest?v=74">
-<link rel="icon" href="./logo-spesen.png?v=74" type="image/png">
-<link rel="apple-touch-icon" href="./logo-spesen.png?v=74">
+<link rel="manifest" href="./manifest.webmanifest?v=75">
+<link rel="icon" href="./logo-spesen.png?v=75" type="image/png">
+<link rel="apple-touch-icon" href="./logo-spesen.png?v=75">
 <title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
@@ -1537,6 +1537,66 @@
     });
   }
 
+
+  function extractOtherAssignments(lines){
+    const defs=[
+      {functionKey:'4 offizieller',functionName:'4. Offizieller',labels:['4\\.?\\s*Off(?:izieller)?','Vierter\\s+Offizieller']},
+      {functionKey:'pate',functionName:'Pate',labels:['Pate']},
+      {functionKey:'beo',functionName:'BEO',labels:['BEO','Beobachter','Beobachtung']}
+    ];
+    const found=[];
+    for(const def of defs){
+      const person=cleanPerson(lineValue(lines,def.labels));
+      if(person && !fixedOtherFunctionFromText(person)){
+        found.push({functionKey:def.functionKey,functionName:def.functionName,person});
+      }
+    }
+    return found;
+  }
+
+  function assignOtherRoleToCurrentUser(p){
+    if(!p) return {matched:false,reason:''};
+    const assignments=Array.isArray(p.otherAssignments)?p.otherAssignments:[];
+    const defaultsName=norm($('defName').value);
+
+    p._otherRoleIdentityChecked=assignments.length>0;
+    p._userOtherFunctionKey='';
+    p._userOtherFunctionName='';
+    p._userOtherAssignmentPerson='';
+
+    if(!assignments.length) return {matched:false,reason:''};
+
+    if(!defaultsName){
+      return {matched:false,reason:'Funktion erkannt, aber in den persönlichen Stammdaten ist noch kein Name gespeichert.'};
+    }
+
+    const match=assignments.find(a=>a&&a.person&&personNameMatches(a.person,defaultsName));
+    if(match){
+      p._userOtherFunctionKey=match.functionKey;
+      p._userOtherFunctionName=match.functionName;
+      p._userOtherAssignmentPerson=match.person;
+      p.assignmentFunction=match.functionName;
+      p.assignmentPerson=match.person;
+
+      // Für die eigene Quittung werden die persönlichen Stammdaten verwendet.
+      p.name=defaultsName;
+      p.group=norm($('defGroup').value)||'SRG-Main-Spessart';
+
+      return {
+        matched:true,
+        functionName:match.functionName,
+        person:match.person,
+        reason:match.functionName+' wurde '+defaultsName+' zugeordnet; persönliche Stammdaten werden übernommen.'
+      };
+    }
+
+    p._otherRoleDoesNotMatchDefaults=true;
+    return {
+      matched:false,
+      reason:'Sonstige Funktion erkannt, aber die eingeteilte Person stimmt nicht mit dem Namen aus den persönlichen Stammdaten überein.'
+    };
+  }
+
   function parseAssignment(text){
     const lines=linesOf(text), joined=lines.join('\n');
     const out={};
@@ -1578,6 +1638,18 @@
     if(!out.assignmentFunction){
       const exactRole=lines.find(l=>/^(?:4\.?\s*Off(?:izieller)?|Vierter\s+Offizieller|Pate|BEO|Beobachter|Beobachtung)$/i.test(norm(l)));
       out.assignmentFunction=exactRole?norm(exactRole):'';
+    }
+    out.otherAssignments=extractOtherAssignments(lines);
+    if(!out.otherAssignments.length){
+      const genericKey=fixedOtherFunctionFromText(out.assignmentFunction);
+      const genericPerson=cleanPerson(lineValue(lines,['Funktionsinhaber','Eingeteilte Person','Person']));
+      if(genericKey&&genericPerson){
+        out.otherAssignments.push({
+          functionKey:genericKey,
+          functionName:genericKey==='4 offizieller'?'4. Offizieller':genericKey==='pate'?'Pate':'BEO',
+          person:genericPerson
+        });
+      }
     }
     out.sra1=assistantValue(lines,1);
     out.sra2=assistantValue(lines,2);
@@ -1816,6 +1888,8 @@
   }
   function detectedOtherFunctionKey(p){
     if(!p)return '';
+    if(p._userOtherFunctionKey) return p._userOtherFunctionKey;
+    if(p._otherRoleIdentityChecked) return '';
     return fixedOtherFunctionFromText([p.assignmentFunction,p.rawText].filter(Boolean).join(' '));
   }
   function detectedOtherRule(p){
@@ -3021,6 +3095,17 @@
       .replace(/[^a-z0-9äöüß]+/gi,' ')
       .replace(/\s+/g,' ').trim();
   }
+  function personNameMatches(a,b){
+    const ca=canonicalPersonName(a), cb=canonicalPersonName(b);
+    if(!ca||!cb) return false;
+    if(ca===cb) return true;
+    const aa=ca.split(' ').filter(Boolean), bb=cb.split(' ').filter(Boolean);
+    if(aa.length===2 && bb.length===2 && aa[0]===bb[1] && aa[1]===bb[0]) return true;
+    if(aa.length===bb.length && aa.length>1){
+      return [...aa].sort().join('|')===[...bb].sort().join('|');
+    }
+    return false;
+  }
   function autoUseSrStartFromDefaults(p){
     if(!p || !norm(p.name)) return false;
     const defaultsName=norm($('defName').value);
@@ -3108,7 +3193,9 @@
   }
   function applyParsed(){
     const text=$('mailText').value; if(!norm(text)){ $('status').textContent='Bitte zuerst eine Einteilungsmail laden oder Text einfügen.'; $('status').className='status warn'; return }
-    const p=parseAssignment(text); lastParsedAssignment=p; activeReceiptId=null; clearMileageActualState(); let count=0;
+    const p=parseAssignment(text);
+    const otherRoleIdentity=assignOtherRoleToCurrentUser(p);
+    lastParsedAssignment=p; activeReceiptId=null; clearMileageActualState(); let count=0;
     if($('otherFunctionSelect'))$('otherFunctionSelect').value='';
     if($('otherScopeSelect'))$('otherScopeSelect').value='';
     guideState.parsed=true;
@@ -3123,6 +3210,19 @@
     guideState.printed=false;
     updateGuide();
     count+=setAuto('date',p.date);count+=setAuto('place',p.place);count+=setAuto('home',p.home);count+=setAuto('away',p.away);count+=setAuto('name',p.name); if(p.group)count+=setAuto('group',p.group);
+
+    if(otherRoleIdentity.matched){
+      const defaultsName=norm($('defName').value);
+      const defaultsGroup=norm($('defGroup').value)||'SRG-Main-Spessart';
+      const defaultsStreet=norm($('defStreet').value);
+      const defaultsTown=norm($('defTown').value);
+
+      if(defaultsName) setAuto('name',defaultsName);
+      if(defaultsGroup) setAuto('group',defaultsGroup);
+      if(defaultsStreet) setAuto('street',defaultsStreet);
+      if(defaultsTown) setAuto('town',defaultsTown);
+    }
+
     if(p.destinationAddress) setAuto('routeDestination',p.destinationAddress);
     const srStartFromDefaults=autoUseSrStartFromDefaults(p);
     $('teamSra1Name').textContent=p.sra1||''; $('teamSra2Name').textContent=p.sra2||'';
@@ -3147,8 +3247,26 @@
     }
     const detectedScope=detectOtherScope(p);
     if(detectedScope)$('otherScopeSelect').value=detectedScope;
-    const extras=[p.assignmentFunction&&('Funktion: '+p.assignmentFunction),p.competition&&('Spielklasse: '+p.competition),p.league&&('Liga: '+p.league),p.teamType&&('Mannschaftsart: '+p.teamType),p.time&&('Anstoß: '+p.time),p.sra1&&('SRA 1: '+p.sra1),p.sra2&&('SRA 2: '+p.sra2)].filter(Boolean).join(' · '); $('mailMeta').textContent=extras;
-    $('status').textContent=count?('Übernommen: '+count+' Feld'+(count===1?'':'er')+'.'+(srStartFromDefaults?' SR wurde den persönlichen Stammdaten eindeutig zugeordnet; die Stammdaten-Adresse wurde als Startpunkt SR übernommen.':'')+(autoTeamChanged?' Fahrtart wurde automatisch auf Gespann gestellt.':'')+(storedAssistants?' SRA wurden im Verzeichnis gespeichert.':'')+(restoredSraHomes?' '+restoredSraHomes+' gespeicherte SRA-Adresse'+(restoredSraHomes===1?'':'n')+' übernommen.':'')+' Bitte kurz prüfen, bevor du druckst.'):'Es konnten keine passenden Felder erkannt werden. Du kannst die Angaben trotzdem manuell eintragen.'; $('status').className='status '+(count?'ok':'warn');
+    const extras=[
+      p.assignmentFunction&&('Funktion: '+p.assignmentFunction),
+      p.assignmentPerson&&('Ausführende Person: '+p.assignmentPerson),
+      p.competition&&('Spielklasse: '+p.competition),
+      p.league&&('Liga: '+p.league),
+      p.teamType&&('Mannschaftsart: '+p.teamType),
+      p.time&&('Anstoß: '+p.time),
+      p.sra1&&('SRA 1: '+p.sra1),
+      p.sra2&&('SRA 2: '+p.sra2)
+    ].filter(Boolean).join(' · '); $('mailMeta').textContent=extras;
+    $('status').textContent=count?(
+      'Übernommen: '+count+' Feld'+(count===1?'':'er')+'.'
+      +(otherRoleIdentity.reason?' '+otherRoleIdentity.reason:'')
+      +(srStartFromDefaults?' Die Stammdaten-Adresse wurde als Startpunkt übernommen.':'')
+      +(autoTeamChanged?' Fahrtart wurde automatisch auf Gespann gestellt.':'')
+      +(storedAssistants?' SRA wurden im Verzeichnis gespeichert.':'')
+      +(restoredSraHomes?' '+restoredSraHomes+' gespeicherte SRA-Adresse'+(restoredSraHomes===1?'':'n')+' übernommen.':'')
+      +' Bitte kurz prüfen, bevor du druckst.'
+    ):'Es konnten keine passenden Felder erkannt werden. Du kannst die Angaben trotzdem manuell eintragen.';
+    $('status').className='status '+(count?(otherRoleIdentity.reason&&!otherRoleIdentity.matched?'warn':'ok'):'warn');
     updateAssociationAutoInfo(p);
     updateSpecialFeeQuestion(p,true);
     updateKmLimitHint(p);
@@ -4015,7 +4133,7 @@
   // Web-App-Unterstützung (GitHub Pages / PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=74', {scope:'./'}).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=75', {scope:'./'}).catch(() => {});
     });
   }
 </script>
