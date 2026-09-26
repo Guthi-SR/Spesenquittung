@@ -8,9 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
-<link rel="manifest" href="./manifest.webmanifest?v=70">
-<link rel="icon" href="./logo-spesen.png?v=70" type="image/png">
-<link rel="apple-touch-icon" href="./logo-spesen.png?v=70">
+<link rel="manifest" href="./manifest.webmanifest?v=71">
+<link rel="icon" href="./logo-spesen.png?v=71" type="image/png">
+<link rel="apple-touch-icon" href="./logo-spesen.png?v=71">
 <title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
@@ -120,6 +120,29 @@
   .sra-dir-actions{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
   .sra-dir-actions button{padding:7px 9px;font-size:11px}
   .sra-dir-meta{font-size:10px;color:#777;margin-top:4px}
+  .guide-details{
+    margin-bottom:8px;
+    border:1px solid #d6dde5;
+    border-radius:8px;
+    background:#f8fafb;
+    overflow:hidden
+  }
+  .guide-details>summary{
+    cursor:pointer;
+    padding:9px 11px;
+    font-weight:800;
+    color:#222;
+    background:#eef2f5;
+    user-select:none
+  }
+  .guide-details[open]>summary{border-bottom:1px solid #d6dde5}
+  .guide-details .guide-box{
+    margin:0;
+    border:0;
+    border-radius:0;
+    background:#fff;
+    padding:8px 9px
+  }
   .guide-box{line-height:1.25}
   .guide-title{display:block;margin-bottom:5px}
   .guide-step{
@@ -498,21 +521,23 @@
   <div class="toolbar-grid">
     <div class="panel">
       <h2>1. Einteilungsmail einfügen</h2>
-      <div class="hint guide-box" id="guideBox">
-        <strong class="guide-title">Anleitung</strong>
-        <span id="guideStep1" class="guide-step">1. Einteilungsmail öffnen</span>
-        <span id="guideStep2" class="guide-step">2. Kompletten Mailtext kopieren</span>
-        <span id="guideStep3" class="guide-step">3. Mailtext rechts einfügen</span>
-        <span id="guideStep4" class="guide-step">4. „Mail auswerten &amp; übernehmen“ klicken</span>
-        <span id="guideStep5" class="guide-step">5. Startpunkt und Zieladresse prüfen</span>
-        <span id="guideStep6" class="guide-step">6. „Route berechnen“ klicken</span>
-        <span id="guideStep7" class="guide-step">7. Angaben prüfen und Route auswählen</span>
-        <span id="guideStep8" class="guide-step">8. Bei Bedarf Route in Google Maps öffnen und kontrollieren</span>
-        <span id="guideStep9" class="guide-step">9. Spesen kontrollieren</span>
-        <span id="guideStep10" class="guide-step">10. Spesenquittung kontrollieren</span>
-        <span id="guideStep11" class="guide-step">11. A5 oder A4 auswählen</span>
-        <span id="guideStep12" class="guide-step">12. „Drucken / PDF“ klicken</span>
-      </div>
+      <details class="guide-details">
+        <summary>Anleitung</summary>
+        <div class="hint guide-box" id="guideBox">
+          <span id="guideStep1" class="guide-step">1. Einteilungsmail öffnen</span>
+          <span id="guideStep2" class="guide-step">2. Kompletten Mailtext kopieren</span>
+          <span id="guideStep3" class="guide-step">3. Mailtext rechts einfügen</span>
+          <span id="guideStep4" class="guide-step">4. „Mail auswerten &amp; übernehmen“ klicken</span>
+          <span id="guideStep5" class="guide-step">5. Startpunkt und Zieladresse prüfen</span>
+          <span id="guideStep6" class="guide-step">6. „Route berechnen“ klicken</span>
+          <span id="guideStep7" class="guide-step">7. Angaben prüfen und Route auswählen</span>
+          <span id="guideStep8" class="guide-step">8. Bei Bedarf Route in Google Maps öffnen und kontrollieren</span>
+          <span id="guideStep9" class="guide-step">9. Spesen kontrollieren</span>
+          <span id="guideStep10" class="guide-step">10. Spesenquittung kontrollieren</span>
+          <span id="guideStep11" class="guide-step">11. A5 oder A4 auswählen</span>
+          <span id="guideStep12" class="guide-step">12. „Drucken / PDF“ klicken</span>
+        </div>
+      </details>
       <div id="status" class="status">Noch keine Einteilungsmail eingelesen.</div>
       <details>
         <summary>Persönliche Stammdaten</summary>
@@ -3188,7 +3213,7 @@
   // Web-App-Unterstützung (GitHub Pages / PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=70', {scope:'./'}).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=71', {scope:'./'}).catch(() => {});
     });
   }
 </script>
