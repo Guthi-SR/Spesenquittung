@@ -8,9 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
-<link rel="manifest" href="./manifest.webmanifest?v=82">
-<link rel="icon" href="./logo-spesen.png?v=82" type="image/png">
-<link rel="apple-touch-icon" href="./logo-spesen.png?v=82">
+<link rel="manifest" href="./manifest.webmanifest?v=83">
+<link rel="icon" href="./logo-spesen.png?v=83" type="image/png">
+<link rel="apple-touch-icon" href="./logo-spesen.png?v=83">
 <title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
@@ -59,6 +59,11 @@
   .badge{display:inline-block;background:#e7f1fb;color:#1f4e79;border-radius:10px;padding:2px 6px;font-size:10px;font-weight:700;margin-left:4px}
   .route-data{font-size:12px;line-height:1.45;color:#333}
   .route-card button{margin-top:7px;width:100%;padding:7px 8px}
+  .manual-route-input{
+    width:100%;margin-top:6px;padding:8px;border:1px solid #c8ced6;
+    border-radius:6px;background:#fff;font-size:16px
+  }
+  .manual-route-note{font-size:10.5px;color:#666;line-height:1.35;margin-top:5px}
   .route-resolved{font-size:11px;color:#555;margin-top:7px;line-height:1.35}
   .privacy-note{font-size:11px;color:#666;margin-top:6px}
   .route-grid-main{grid-template-columns:170px 1fr 1fr 190px}
@@ -2827,30 +2832,112 @@
     $('routeStatus').className=mileageCapNotices.length?'status warn':'status ok';
     $('googleMapsBtn').disabled=false;
   }
+  function manualRouteNumber(v){
+    const raw=String(v==null?'':v).trim().replace(/\s/g,'');
+    if(!raw)return 0;
+    const normalized=raw.includes(',')?raw.replace(/\./g,'').replace(',','.'):raw;
+    const n=parseFloat(normalized.replace(/[^0-9.-]/g,''));
+    return Number.isFinite(n)?n:0;
+  }
+
+  function applyManualRouteKm(value){
+    const simpleKm=manualRouteNumber(value);
+    if(!(simpleKm>0)){
+      $('routeStatus').textContent='Bitte bei der manuellen Strecke eine gültige Kilometerzahl größer 0 eingeben.';
+      $('routeStatus').className='status warn';
+      return;
+    }
+
+    selectedRouteIndex=-1;
+    guideState.routeCalculated=true;
+    guideState.routeChosen=true;
+
+    const multiplier=num($('tripMode').value)||2;
+    const actualKm=roundUpKm(simpleKm*multiplier);
+
+    setMileageActual(
+      {srKm:actualKm,teamKm:0,team1Km:0,team2Km:0,sra1Km:null,sra2Km:null},
+      'manual-route'
+    );
+
+    $('teamKm').value='';
+    $('teamTravel').value='';
+    $('team2Km').value='';
+    $('team2Travel').value='';
+
+    applyMileageCaps();
+    renderRoutes(currentRoutes);
+    updateGuide();
+
+    const billedKm=num($('srKm').value);
+    $('routeStatus').textContent=
+      'Manuelle Strecke übernommen: '+String(simpleKm).replace('.',',')+' km einfache Strecke'
+      +(multiplier===2?' · '+actualKm+' km Hin- und Rückfahrt':' · '+actualKm+' km Abrechnung')
+      +(billedKm<actualKm?' · Kilometer-Obergrenze angewandt: abgerechnet werden '+billedKm+' km.':'.');
+    $('routeStatus').className=mileageCapNotices.length?'status warn':'status ok';
+    $('googleMapsBtn').disabled=false;
+  }
+
   function renderRoutes(routes){
-    const box=$('routeResults'); box.className='route-results'; box.innerHTML='';
-    if(!routes.length) return;
-    const shortest=Math.min(...routes.map(r=>r.distance));
-    const fastest=Math.min(...routes.map(r=>r.duration));
-    routes.forEach((r,i)=>{
-      const card=document.createElement('div');
-      card.className='route-card'+(selectedRouteIndex===i?' selected':'');
-      const badges=[];
-      if(Math.abs(r.distance-shortest)<20) badges.push('kürzeste');
-      if(Math.abs(r.duration-fastest)<30) badges.push('schnellste');
-      if(!badges.length) badges.push('Alternative');
-      const multiplier=num($('tripMode').value)||2;
-      const simple=r.distance/1000, billed=simple*multiplier;
-      card.innerHTML='<div class="route-head"><div class="route-name">Route '+(i+1)+'</div><div>'+badges.map(b=>'<span class="badge">'+b+'</span>').join('')+'</div></div>'+ 
-        '<div class="route-data">Einfache Strecke: <strong>'+fmtKm(simple)+' km</strong><br>'+ 
-        (multiplier===2?'Hin + zurück: <strong>'+fmtKm(billed)+' km</strong><br>':'Abrechnung: <strong>'+fmtKm(billed)+' km</strong><br>')+
-        'Fahrzeit einfach: <strong>'+fmtMinutes(r.duration)+'</strong></div>'+ 
-        '<button type="button" data-route="'+i+'">'+(selectedRouteIndex===i?'Ausgewählt':'Diese Route übernehmen')+'</button>';
-      box.appendChild(card);
-    });
+    const box=$('routeResults');
+    box.className='route-results';
+    box.innerHTML='';
+
+    const routeList=Array.isArray(routes)?routes:[];
+    if(routeList.length){
+      const shortest=Math.min(...routeList.map(r=>r.distance));
+      const fastest=Math.min(...routeList.map(r=>r.duration));
+
+      routeList.forEach((r,i)=>{
+        const card=document.createElement('div');
+        card.className='route-card'+(selectedRouteIndex===i?' selected':'');
+        const badges=[];
+        if(Math.abs(r.distance-shortest)<20) badges.push('kürzeste');
+        if(Math.abs(r.duration-fastest)<30) badges.push('schnellste');
+        if(!badges.length) badges.push('Alternative');
+        const multiplier=num($('tripMode').value)||2;
+        const simple=r.distance/1000, billed=simple*multiplier;
+        card.innerHTML='<div class="route-head"><div class="route-name">Route '+(i+1)+'</div><div>'+badges.map(b=>'<span class="badge">'+b+'</span>').join('')+'</div></div>'+
+          '<div class="route-data">Einfache Strecke: <strong>'+fmtKm(simple)+' km</strong><br>'+
+          (multiplier===2?'Hin + zurück: <strong>'+fmtKm(billed)+' km</strong><br>':'Abrechnung: <strong>'+fmtKm(billed)+' km</strong><br>')+
+          'Fahrzeit einfach: <strong>'+fmtMinutes(r.duration)+'</strong></div>'+
+          '<button type="button" data-route="'+i+'">'+(selectedRouteIndex===i?'Ausgewählt':'Diese Route übernehmen')+'</button>';
+        box.appendChild(card);
+      });
+    }
+
+    const manualSelected=mileageActualState&&mileageActualState.source==='manual-route';
+    const multiplier=num($('tripMode').value)||2;
+    const rememberedSimple=manualSelected&&mileageActualState.srKm!=null
+      ? (Number(mileageActualState.srKm)/multiplier)
+      : '';
+
+    const manual=document.createElement('div');
+    manual.className='route-card'+(manualSelected?' selected':'');
+    manual.innerHTML=
+      '<div class="route-head"><div class="route-name">Kilometer manuell eingeben</div><div><span class="badge">manuell</span></div></div>'+
+      '<div class="route-data">Wenn keine der berechneten Routen stimmt, kannst du die korrekte Strecke selbst eintragen.</div>'+
+      '<input id="manualRouteKmInput" class="manual-route-input" type="text" inputmode="decimal" placeholder="Einfache Strecke in km" value="'+
+        (rememberedSimple!==''?String(rememberedSimple).replace('.',','):'')+'">'+
+      '<div class="manual-route-note">Bitte die einfache Strecke eintragen. '+(multiplier===2?'Hin- und Rückfahrt werden automatisch verdoppelt.':'Es wird die einfache Fahrt abgerechnet.')+'</div>'+
+      '<button id="applyManualRouteKmBtn" type="button">'+(manualSelected?'Manuelle KM übernommen':'Manuelle KM übernehmen')+'</button>';
+    box.appendChild(manual);
+
     box.querySelectorAll('button[data-route]').forEach(btn=>btn.addEventListener('click',()=>applyRoute(Number(btn.dataset.route))));
+    const manualBtn=$('applyManualRouteKmBtn');
+    const manualInput=$('manualRouteKmInput');
+    if(manualBtn&&manualInput){
+      manualBtn.addEventListener('click',()=>applyManualRouteKm(manualInput.value));
+      manualInput.addEventListener('keydown',ev=>{
+        if(ev.key==='Enter'){
+          ev.preventDefault();
+          applyManualRouteKm(manualInput.value);
+        }
+      });
+    }
     updateGuide();
   }
+
   function openGoogleMaps(){
     if($('travelMode').value==='team') return openTeamGoogleMaps('sr');
     const start=norm($('routeStart').value);
@@ -3130,7 +3217,10 @@
         $('routeStatus').className='status warn';
       }
     }catch(err){
-      $('routeStatus').textContent='Routenberechnung nicht möglich: '+(err&&err.message?err.message:'Unbekannter Fehler');
+      guideState.routeCalculated=true;
+      renderRoutes([]);
+      updateGuide();
+      $('routeStatus').textContent='Routenberechnung nicht möglich: '+(err&&err.message?err.message:'Unbekannter Fehler')+' Du kannst die Kilometer unten manuell eingeben.';
       $('routeStatus').className='status warn';
     }finally{
       $('calcRoutesBtn').disabled=false;
@@ -4478,7 +4568,7 @@
   // Web-App-Unterstützung (GitHub Pages / PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=82', {scope:'./'}).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=83', {scope:'./'}).catch(() => {});
     });
   }
 </script>
