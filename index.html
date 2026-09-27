@@ -8,9 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
-<link rel="manifest" href="./manifest.webmanifest?v=81">
-<link rel="icon" href="./logo-spesen.png?v=81" type="image/png">
-<link rel="apple-touch-icon" href="./logo-spesen.png?v=81">
+<link rel="manifest" href="./manifest.webmanifest?v=82">
+<link rel="icon" href="./logo-spesen.png?v=82" type="image/png">
+<link rel="apple-touch-icon" href="./logo-spesen.png?v=82">
 <title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
@@ -188,6 +188,13 @@
   #date::-webkit-datetime-edit-month-field,
   #date::-webkit-datetime-edit-year-field{font-family:Arial,Helvetica,sans-serif;font-size:10pt}
   .teams{display:grid;grid-template-columns:1fr auto 1fr;gap:4mm;align-items:baseline;margin-bottom:4.5mm}
+  .assigned-referee-row{
+    display:flex;align-items:baseline;gap:2mm;
+    margin:-1.5mm 0 2.5mm;font-size:8.5pt;line-height:1.15
+  }
+  .assigned-referee-row[hidden]{display:none!important}
+  .assigned-referee-row span{color:#444;white-space:nowrap}
+  .assigned-referee-row strong{font-size:9.2pt;font-weight:700}
   .teamwrap label{display:block;font-size:7.5pt;color:#444;margin-top:1mm}
   .teamwrap input{width:100%;border:0;padding:0 1mm;font-size:10pt;line-height:1.15;vertical-align:baseline;outline:none}
   .gegen{font-size:9pt;padding-bottom:1mm}
@@ -767,6 +774,11 @@
       <div class="teamwrap"><input id="home" type="text"><label>Platzverein</label></div>
       <div class="gegen">gegen</div>
       <div class="teamwrap"><input id="away" type="text"><label>Gastverein</label></div>
+    </div>
+
+    <div id="assignedRefereeRow" class="assigned-referee-row" hidden>
+      <span>Schiedsrichter:</span>
+      <strong id="assignedRefereeName"></strong>
     </div>
 
     <table aria-label="Spesen">
@@ -1648,6 +1660,7 @@
     out.name=cleanPerson(lineValue(lines,['Schiedsrichter','Referee','SR\\s*1','SR']));
     if(!out.name) out.name=cleanPerson(lineValue(lines,['Name']));
     if(/^(pate|coach|coaching|beobachter|sichter|4\.? offizieller)$/i.test(out.name)) out.name='';
+    out.refereeName=out.name;
 
     out.group=lineValue(lines,['SR[ .-]*Vgg\.?\/Gruppe','SR-Gruppe','Schiedsrichtergruppe','Gruppe']);
     out.competition=lineValue(lines,['Spielklasse','Wettbewerb','Klasse']);
@@ -2027,6 +2040,19 @@
       simpleKmLimit:rule.simpleKmLimit
     };
   }
+  function assignedRefereeName(p){
+    if(!p)return '';
+    if(norm(p.refereeName))return norm(p.refereeName);
+
+    const raw=norm(p.rawText||'');
+    if(raw){
+      const lines=linesOf(raw);
+      const name=cleanPerson(lineValue(lines,['Schiedsrichter','Referee','SR\\s*1','SR']));
+      if(name && !/^(pate|coach|coaching|beobachter|sichter|4\.? offizieller)$/i.test(name)) return name;
+    }
+    return '';
+  }
+
   function updateReceiptRoleLabels(p){
     const association=p?currentAssociationFor(p):'';
     const rule=association==='SONSTIGE'?selectedOtherRule(p):null;
@@ -2034,6 +2060,11 @@
     const fnLabel=rule?rule.functionName:(fn==='4 offizieller'?'4. Offizieller':fn==='pate'?'Pate':fn==='beo'?'BEO':'');
     if($('receiptTitle'))$('receiptTitle').textContent=association==='SONSTIGE'?'Spesenquittung':'Spesenquittung für Schiedsrichter';
     if($('srExpenseLabel'))$('srExpenseLabel').textContent=association==='SONSTIGE'&&fnLabel?'Aufwandsentschädigung / Spesen für '+fnLabel:'Aufwandsentschädigung / Spesen für Schiedsrichter';
+
+    const showReferee=association==='SONSTIGE' && (fn==='4 offizieller'||fn==='pate'||fn==='beo');
+    const referee=showReferee?assignedRefereeName(p):'';
+    if($('assignedRefereeRow')) $('assignedRefereeRow').hidden=!showReferee||!referee;
+    if($('assignedRefereeName')) $('assignedRefereeName').textContent=referee;
   }
 
   function feeText(p){
@@ -4447,7 +4478,7 @@
   // Web-App-Unterstützung (GitHub Pages / PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=81', {scope:'./'}).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=82', {scope:'./'}).catch(() => {});
     });
   }
 </script>
