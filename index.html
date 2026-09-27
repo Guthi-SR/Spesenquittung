@@ -2856,7 +2856,7 @@
     const actualKm=roundUpKm(simpleKm*multiplier);
 
     setMileageActual(
-      {srKm:actualKm,teamKm:0,team1Km:0,team2Km:0,sra1Km:null,sra2Km:null},
+      {srKm:actualKm,teamKm:0,team1Km:0,team2Km:0,sra1Km:null,sra2Km:null,manualSimpleKm:simpleKm},
       'manual-route'
     );
 
@@ -2908,8 +2908,10 @@
 
     const manualSelected=mileageActualState&&mileageActualState.source==='manual-route';
     const multiplier=num($('tripMode').value)||2;
-    const rememberedSimple=manualSelected&&mileageActualState.srKm!=null
-      ? (Number(mileageActualState.srKm)/multiplier)
+    const rememberedSimple=manualSelected
+      ? (mileageActualState.manualSimpleKm!=null
+          ? Number(mileageActualState.manualSimpleKm)
+          : (mileageActualState.srKm!=null?Number(mileageActualState.srKm)/multiplier:''))
       : '';
 
     const manual=document.createElement('div');
