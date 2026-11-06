@@ -8,9 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Spesenabrechnung SRG MSP">
-<link rel="manifest" href="./manifest.webmanifest?v=85">
-<link rel="icon" href="./logo-spesen.png?v=85" type="image/png">
-<link rel="apple-touch-icon" href="./logo-spesen.png?v=85">
+<link rel="manifest" href="./manifest.webmanifest?v=86">
+<link rel="icon" href="./logo-spesen.png?v=86" type="image/png">
+<link rel="apple-touch-icon" href="./logo-spesen.png?v=86">
 <title>Spesenabrechnung SRG MSP</title>
 <style>
   :root{--ink:#111;--muted:#666;--line:#222;--soft:#f3f4f6;--accent:#1f4e79;--ok:#176b3a;--warn:#9a6700}
@@ -566,6 +566,17 @@
     .sheet{transform:none!important}
   }
 
+  /* Schnelleingabe ohne Einteilungsmail – 2026-11-06 */
+  .manual-entry-panel{grid-column:1/-1;border-color:#aec4da;background:#f5f9fe}
+  .manual-entry-panel h2{font-size:16px}
+  .manual-entry-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:10px}
+  .manual-entry-grid label{display:block;color:#334155;font-size:12px;font-weight:600}
+  .manual-entry-grid input,.manual-entry-grid select{display:block;width:100%;margin-top:4px;padding:9px;min-height:38px;border:1px solid #bdcad9;border-radius:7px;background:#fff;color:#111;font-size:14px}
+  .manual-entry-grid .wide{grid-column:span 2}
+  .manual-entry-panel .hint{line-height:1.5}
+  @media(max-width:800px){.manual-entry-grid{grid-template-columns:1fr 1fr}.manual-entry-grid .wide{grid-column:span 2}}
+  @media(max-width:480px){.manual-entry-grid{grid-template-columns:1fr}.manual-entry-grid .wide{grid-column:auto}}
+
 </style>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
@@ -573,9 +584,52 @@
 <section class="toolbar">
   <h1>Spesenquittung – Einteilungsmail einlesen</h1>
   <div class="toolbar-grid">
+    <div class="panel manual-entry-panel" id="manualEntryPanel">
+      <h2>Ohne Einteilungsmail – Spiel manuell erfassen</h2>
+      <div class="hint">Für eine schnelle Spesenquittung Datum, Mannschaften und Spielort selbst eintragen. Spielklasse und Mannschaftsart helfen bei der automatischen Spesenberechnung. Die bestehende Routenberechnung und der Ausdruck werden weiterverwendet.</div>
+      <div class="manual-entry-grid">
+        <label>Spieldatum *<input id="manualDate" type="date"></label>
+        <label>Anstoß (optional)<input id="manualKickoff" type="time"></label>
+        <label>Verband
+          <select id="manualAssociation">
+            <option value="auto" selected>Automatisch erkennen</option>
+            <option value="BFV">BFV – Bayern</option>
+            <option value="HFV">HFV – Hessen</option>
+            <option value="SONSTIGE">Sonstige Funktion</option>
+          </select>
+        </label>
+        <label>Heimmannschaft *<input id="manualHome" type="text" placeholder="Platzverein"></label>
+        <label>Gastmannschaft *<input id="manualAway" type="text" placeholder="Gastverein"></label>
+        <label>Spielort *<input id="manualPlace" type="text" placeholder="Ort / Sportplatz"></label>
+        <label class="wide">Spielstätte / Zieladresse (optional)<input id="manualDestination" type="text" placeholder="Straße, PLZ und Ort; sonst wird der Spielort verwendet"></label>
+        <label>Spielklasse / Liga<input id="manualCompetition" type="text" placeholder="z. B. Kreisliga, Bezirksliga"></label>
+        <label>Mannschaftsart
+          <select id="manualTeamType">
+            <option value="">Bitte auswählen</option>
+            <option value="Herren">Herren</option>
+            <option value="Frauen">Frauen</option>
+            <option value="Ü-Mannschaften">Ü-Mannschaften</option>
+            <option value="U19 Junioren">U19 Junioren</option>
+            <option value="U17 Junioren">U17 Junioren</option>
+            <option value="U15 Junioren">U15 Junioren</option>
+            <option value="U13 Junioren">U13 Junioren</option>
+            <option value="U11 Junioren">U11 Junioren</option>
+            <option value="U17 Juniorinnen">U17 Juniorinnen</option>
+            <option value="U15 Juniorinnen">U15 Juniorinnen</option>
+            <option value="U13 Juniorinnen">U13 Juniorinnen</option>
+            <option value="U11 Juniorinnen">U11 Juniorinnen</option>
+          </select>
+        </label>
+      </div>
+      <div class="actions">
+        <button id="applyManualBtn" type="button">Spieldaten übernehmen</button>
+      </div>
+      <div id="manualEntryStatus" class="status" role="status">Noch keine manuellen Spieldaten übernommen.</div>
+      <div class="hint">Danach Startpunkt und Zieladresse im Abschnitt „Fahrtstrecke“ prüfen, Route 1 oder 2 wählen oder Kilometer manuell eintragen, Spesen prüfen und „Drucken / PDF“ auswählen. Ohne eindeutige Spielklasse bitte den Spesensatz kontrollieren.</div>
+    </div>
     <div class="panel">
       <h2>1. Einteilungsmail einfügen</h2>
-      <details class="guide-details">
+      <details class="guide-details" id="mailGuideDetails">
         <summary>Anleitung</summary>
         <div class="hint guide-box" id="guideBox">
           <span id="guideStep1" class="guide-step">1. Einteilungsmail öffnen</span>
@@ -1001,6 +1055,7 @@
     stage.style.height='';
   }
 
+  let manualActive=false;
   const guideState={
     parsed:false,
     addressesChecked:false,
@@ -1016,13 +1071,13 @@
 
   function guideHasMailText(){
     const el=$('mailText');
-    return !!el && !!String(el.value||'').trim();
+    return manualActive || (!!el && !!String(el.value||'').trim());
   }
 
   function updateNextActionButtons(next){
     document.querySelectorAll('button.next-action,select.next-action').forEach(el=>el.classList.remove('next-action'));
 
-    if(next===4 && $('parseBtn')) $('parseBtn').classList.add('next-action');
+    if(next===4 && $('parseBtn') && !manualActive) $('parseBtn').classList.add('next-action');
     if(next===5 && $('checkRouteAddressesBtn')) $('checkRouteAddressesBtn').classList.add('next-action');
     if(next===6 && $('calcRoutesBtn')) $('calcRoutesBtn').classList.add('next-action');
 
@@ -3368,8 +3423,101 @@
     $('routeStatus').textContent='Startpunkt wurde lokal in diesem Browser gespeichert.';
     $('routeStatus').className='status ok';
   }
+
+  function applyManualEntry(){
+    const date=norm($('manualDate').value);
+    const home=norm($('manualHome').value);
+    const away=norm($('manualAway').value);
+    const place=norm($('manualPlace').value);
+    const destination=norm($('manualDestination').value)||place;
+    const competition=norm($('manualCompetition').value);
+    const teamType=norm($('manualTeamType').value);
+    const kickoff=norm($('manualKickoff').value);
+    const status=$('manualEntryStatus');
+    if(!date||!home||!away||!place){
+      status.textContent='Bitte Spieldatum, Heim- und Gastmannschaft sowie Spielort ausfüllen.';
+      status.className='status warn';
+      return;
+    }
+    const association=$('manualAssociation').value;
+    const rawText=[
+      'Manuelle Spieleingabe',
+      'Datum: '+date,
+      'Spielort: '+place,
+      'Heimmannschaft: '+home,
+      'Gastmannschaft: '+away,
+      'Spielklasse: '+competition,
+      'Mannschaftsart: '+teamType
+    ].join('\n');
+    const p={
+      _entryMode:'manual',
+      date,dateTime:date,time:kickoff,
+      place,placeAddress:destination,destinationAddress:destination,
+      home,away,
+      name:norm($('defName').value),
+      refereeName:norm($('defName').value),
+      group:norm($('defGroup').value)||'SRG-Main-Spessart',
+      league:competition,competition,teamType,
+      sra1:'',sra2:'',sra1Contact:null,sra2Contact:null,
+      otherAssignments:[],assignmentFunction:'',srFee:'',
+      rawText,specialMatch:detectSpecialMatch(rawText)
+    };
+    manualActive=true;
+    if($('mailGuideDetails')) $('mailGuideDetails').hidden=true;
+    lastParsedAssignment=p;
+    activeReceiptId=null;
+    clearMileageActualState();
+    currentRoutes=[];
+    selectedRouteIndex=-1;
+    ['srKm','srTravel','teamKm','teamTravel','team2Km','team2Travel',
+     'sra1Km','sra1Travel','sra2Km','sra2Travel',
+     'srFee','sra1Fee','sra2Fee','other','otherCostControl'].forEach(id=>{
+      if($(id)) $(id).value='';
+    });
+    if($('otherFunctionSelect')) $('otherFunctionSelect').value='';
+    if($('otherScopeSelect')) $('otherScopeSelect').value='';
+    $('travelMode').value='single';
+    setTravelMode();
+    Object.keys(guideState).forEach(k=>guideState[k]=false);
+    guideState.parsed=true;
+
+    // Spiel- und Quittungsdaten übernehmen; persönliche Stammdaten bleiben erhalten.
+    $('date').value=date;
+    $('place').value=place;
+    $('home').value=home;
+    $('away').value=away;
+    if(p.name) $('name').value=p.name;
+    $('group').value=p.group;
+    $('routeDestination').value=destination;
+    $('associationSelect').value=association;
+    $('teamSra1Name').textContent='';
+    $('teamSra2Name').textContent='';
+    $('mailMeta').textContent=['Manuelle Eingabe',
+      competition&&('Spielklasse: '+competition),
+      teamType&&('Mannschaftsart: '+teamType),
+      kickoff&&('Anstoß: '+kickoff)
+    ].filter(Boolean).join(' · ');
+    const startFromDefaults=autoUseSrStartFromDefaults(p);
+    updateAssociationAutoInfo(p);
+    updateSpecialFeeQuestion(p,true);
+    updateKmLimitHint(p);
+    applyAutomaticFees(p);
+    calc();
+    updateGuide();
+    status.textContent='Spieldaten in die Quittung übernommen. '+
+      (startFromDefaults?'Startadresse aus Stammdaten übernommen. ':'')+
+      'Bitte Route und Spesen prüfen; anschließend wie gewohnt drucken oder als PDF speichern.';
+    status.className='status ok';
+    $('status').textContent='Manuelle Spieleingabe aktiv – keine Einteilungsmail erforderlich.';
+    $('status').className='status ok';
+    if(association==='auto') resolveAssociationByDestination(p);
+    $('routeStart').scrollIntoView({behavior:'smooth',block:'center'});
+  }
+
   function applyParsed(){
     const text=$('mailText').value; if(!norm(text)){ $('status').textContent='Bitte zuerst eine Einteilungsmail laden oder Text einfügen.'; $('status').className='status warn'; return }
+    manualActive=false;
+    if($('mailGuideDetails')) $('mailGuideDetails').hidden=false;
     const p=parseAssignment(text);
     const otherRoleIdentity=assignOtherRoleToCurrentUser(p);
     lastParsedAssignment=p; activeReceiptId=null; clearMileageActualState(); let count=0;
@@ -4042,6 +4190,8 @@
 
     const st=record.state||{};
     lastParsedAssignment=st.lastParsedAssignment||null;
+    manualActive=!!(lastParsedAssignment && lastParsedAssignment._entryMode==='manual');
+    if($('mailGuideDetails')) $('mailGuideDetails').hidden=manualActive;
     mileageActualState=Object.assign({srKm:null,teamKm:null,team1Km:null,team2Km:null,sra1Km:null,sra2Km:null,source:''},st.mileageActualState||{});
     mileageCapNotices=Array.isArray(st.mileageCapNotices)?st.mileageCapNotices:[];
     currentRoutes=Array.isArray(st.currentRoutes)?st.currentRoutes:[];
@@ -4381,6 +4531,7 @@
     updateGuide();
   });
   $('parseBtn').addEventListener('click',applyParsed);
+  $('applyManualBtn').addEventListener('click',applyManualEntry);
   $('clearMailBtn').addEventListener('click',()=>{
     $('mailText').value='';
     $('status').textContent='Mailtext geleert.';
@@ -4595,7 +4746,7 @@
   // Web-App-Unterstützung (GitHub Pages / PWA)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js?v=85', {scope:'./'}).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=86', {scope:'./'}).catch(() => {});
     });
   }
 </script>
