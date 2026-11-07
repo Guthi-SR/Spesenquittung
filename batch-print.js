@@ -206,6 +206,7 @@
     event.preventDefault();
     event.stopImmediatePropagation();
     if (button.id === 'printBtn') {
+      if (typeof window.__srgMarkPrinted === 'function') window.__srgMarkPrinted();
       printReceipts([null]); // aktuelle, gegebenenfalls noch ungespeicherte Quittung
       return;
     }
