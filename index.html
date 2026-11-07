@@ -1131,6 +1131,9 @@
     updateNextActionButtons(next);
   }
 
+  // Für den erweiterten Druck: den bestehenden 12-Schritte-Leitfaden beibehalten.
+  window.__srgMarkPrinted = function(){ guideState.printed=true; updateGuide(); };
+
   function syncReceiptClone(source, clone){
     const srcFields=source.querySelectorAll('input,textarea,select');
     const dstFields=clone.querySelectorAll('input,textarea,select');
