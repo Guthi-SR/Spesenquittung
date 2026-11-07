@@ -78,7 +78,7 @@
   }
 
   if (archiveBox) {
-    archiveBox.addEventListener('change', updateArchivePrintCount);
+    archiveBox.addEventListener('change', function () { queueMicrotask(updateArchivePrintCount); }, true);
     if (typeof MutationObserver !== 'undefined') {
       new MutationObserver(updateArchivePrintCount).observe(archiveBox, {childList:true, subtree:true});
     }
